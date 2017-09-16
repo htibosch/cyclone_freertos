@@ -2,10 +2,12 @@
 *.d
 
 # Object files
+*.slo
 *.o
 *.ko
+*.d
+*.m
 *.obj
-*.elf
 
 # Linker output
 *.ilk
@@ -27,11 +29,42 @@
 *.so
 *.so.*
 *.dylib
+# Notepad
+*.pnproj
+*.pnps
 
-# Executables
+*~
+*.hex
+*.h88
+*.H88
+*.asm
+*.lst
+*.map
+*.il?
+*.bin
+*.tds
+*.log
+*.ful
+*.bak
+*.~*
+*.dsk
+*.swp
+*.lss
+*.elf
+*.sym
+*.drc
 *.exe
+*.pdf
 *.out
 *.app
+*.tmp
+*.cgl
+*.txt
+*.bmp
+*.doc
+*.jpg
+*.png
+*.lng
 *.i*86
 *.x86_64
 *.hex
