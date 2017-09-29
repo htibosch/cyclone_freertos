@@ -28,38 +28,38 @@ static void pr_info( const char *pcFormat, ... )
 {
 }
 
-static uint32_t readl( uint32_t *pulAddress )
+static uint32_t readl( uint8_t *pucAddress )
 {
-	return *( ( volatile uint32_t *) pulAddress );
+	return *( ( volatile uint32_t *) pucAddress );
 }
 
-static void writel( uint32_t ulValue, uint32_t *pulAddress )
+static void writel( uint32_t ulValue, uint8_t *pucAddress )
 {
-	*( ( volatile uint32_t *) pulAddress ) = ulValue;
+	*( ( volatile uint32_t *) pucAddress ) = ulValue;
 }
 
-static uint32_t *ulFirstIOAddres(int iMacID)
+static uint8_t *ucFirstIOAddres(int iMacID)
 {
-uint32_t *ulReturn;
+uint8_t *ucReturn;
 
 	if( iMacID == 0 )
 	{
-		ulReturn = ( uint32_t * )EMAC_ID_0_ADDRESS;
+		ucReturn = ( uint8_t * )EMAC_ID_0_ADDRESS;
 	}
 	else if( iMacID == 1 )
 	{
-		ulReturn = ( uint32_t * )EMAC_ID_1_ADDRESS;
+		ucReturn = ( uint8_t * )EMAC_ID_1_ADDRESS;
 	}
 	else
 	{
-		ulReturn = ( uint32_t * )NULL;
+		ucReturn = ( uint8_t * )NULL;
 	}
-	return ulReturn;
+	return ucReturn;
 }
 
 void dwmac1000_core_init(int iMacID, EMACDeviceInfo_t *hw, int mtu)
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	value = readl(ioaddr + GMAC_CONTROL);
@@ -108,7 +108,7 @@ uint32_t value;
 /* Enable disable MAC RX/TX */
 void stmmac_set_mac(int iMacID, bool enable)
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	value = readl(ioaddr + MAC_CTRL_REG);
@@ -123,7 +123,7 @@ uint32_t value;
 
 int dwmac1000_rx_ipc_enable(int iMacID, bool enable)
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	value = readl(ioaddr + GMAC_CONTROL);
@@ -149,7 +149,7 @@ uint32_t value;
 void stmmac_set_mac_addr( int iMacID, const uint8_t addr[6],
 			 uint32_t high, uint32_t low)
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t data;
 
 	data = (addr[5] << 8) | addr[4];
@@ -173,7 +173,7 @@ void dwmac1000_set_umac_addr(int iMacID,
 static void dwmac1000_set_eee_mode( int iMacID,
 				   bool en_tx_lpi_clockgating)
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	/*TODO - en_tx_lpi_clockgating treatment */
@@ -189,7 +189,7 @@ uint32_t value;
 
 static void dwmac1000_reset_eee_mode( int iMacID )
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	value = readl(ioaddr + LPI_CTRL_STATUS);
@@ -199,7 +199,7 @@ uint32_t value;
 
 static void dwmac1000_set_eee_pls( int iMacID, int link )
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	value = readl(ioaddr + LPI_CTRL_STATUS);
@@ -215,7 +215,7 @@ uint32_t value;
 
 static void dwmac1000_set_eee_pls_enable( int iMacID, int link )
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	value = readl(ioaddr + LPI_CTRL_STATUS);
@@ -232,7 +232,7 @@ uint32_t value;
 
 static void dwmac1000_set_eee_timer( int iMacID, int ls, int tw )
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	/*
@@ -272,7 +272,7 @@ uint32_t value;
 static void dwmac_ctrl_ane( int iMacID, uint32_t reg, bool ane,
 				  bool srgmi_ral, bool loopback)
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	value = readl(ioaddr + GMAC_AN_CTRL(reg));
@@ -307,7 +307,7 @@ static void dwmac1000_ctrl_ane( int iMacID, bool ane, bool srgmi_ral, bool loopb
  */
 static inline void dwmac_rane( int iMacID, uint32_t reg, bool restart )
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	value = readl(ioaddr + GMAC_AN_CTRL(reg));
@@ -326,7 +326,7 @@ void dwmac1000_rane( int iMacID, bool restart )
 /* RGMII or SMII interface */
 void dwmac1000_rgsmii( int iMacID, EMACStats_t *pxStats)
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t status;
 
 	status = readl(ioaddr + GMAC_RGSMIIIS);
@@ -399,17 +399,17 @@ uint32_t status;
 
 #define GMAC_MDIO_CLK_CSR			STMMAC_CSR_60_100M
 
-#define MII_BUSY 0x00000001
-#define MII_WRITE 0x00000002
+#define MII_BUSY		0x00000001
+#define MII_WRITE		0x00000002
 
-static int waitNotBusy( uint32_t *pulAddress, uint32_t timeout_ms )
+static int waitNotBusy( uint8_t *pucAddress, uint32_t timeout_ms )
 {
 uint32_t value;
 TickType_t xStart = xTaskGetTickCount(), xEnd;
 
 	for( ;; )
 	{
-		value = readl( pulAddress );
+		value = readl( pucAddress );
 		if( ( value & MII_BUSY ) == 0u )
 		{
 			break;
@@ -417,43 +417,48 @@ TickType_t xStart = xTaskGetTickCount(), xEnd;
 		xEnd = xTaskGetTickCount();
 		if( ( xEnd - xStart ) > timeout_ms )
 		{
-			return -1;
+			/* Time-out reached. */
+			return 0;
 		}
 	}
-	return 0;
+	return 1;
 }
 
 static int stmmac_mdio_read( int iMacID, int phyaddr, int phyreg)
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t mii_address = GMAC_MII_ADDR;
 uint32_t mii_data = GMAC_MII_DATA;
 int data;
 uint32_t value = MII_BUSY;
 
-	value |= (phyaddr << GMAC_MDIO_ADDR_SHIFT) & GMAC_MDIO_ADDR_MASK;
+	value |= ( phyaddr << GMAC_MDIO_ADDR_SHIFT ) & GMAC_MDIO_ADDR_MASK;
 
-	value |= (phyreg << GMAC_MDIO_REG_SHIFT) & GMAC_MDIO_REG_MASK;
-	value |= (GMAC_MDIO_CLK_CSR << GMAC_MDIO_CLK_CSR_SHIFT) & GMAC_MDIO_CLK_CSR_MASK;
+	value |= ( phyreg << GMAC_MDIO_REG_SHIFT ) & GMAC_MDIO_REG_MASK;
+	value |= ( GMAC_MDIO_CLK_CSR << GMAC_MDIO_CLK_CSR_SHIFT ) & GMAC_MDIO_CLK_CSR_MASK;
 	#if( HAS_GMAC4 != 0 )
 	{
 		value |= MII_GMAC4_READ;
 	}
+	#else
+	{
+		/* bit-1 remains zero when reading. */
+	}
 	#endif
-	if (waitNotBusy(ioaddr + mii_address, 10))
+	if( !waitNotBusy( ioaddr + mii_address, 10 ) )
 	{
 		return -1;
 	}
 
 	writel(value, ioaddr + mii_address);
 
-	if (waitNotBusy(ioaddr + mii_address, 10))
+	if ( !waitNotBusy( ioaddr + mii_address, 10 ) )
 	{
 		return -1;
 	}
 
 	/* Read the data from the MII data register */
-	data = (int)readl(ioaddr + mii_data);
+	data = (int)readl( ioaddr + mii_data );
 
 	return data;
 }
@@ -468,7 +473,7 @@ uint32_t value = MII_BUSY;
  */
 static int stmmac_mdio_write( int iMacID, int phyaddr, int phyreg, uint16_t phydata )
 {
-uint32_t *ioaddr = ulFirstIOAddres( iMacID );
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t mii_address = GMAC_MII_ADDR;
 uint32_t mii_data = GMAC_MII_DATA;
 uint32_t value = MII_BUSY;
@@ -476,7 +481,7 @@ uint32_t value = MII_BUSY;
 	value |= ( phyaddr << GMAC_MDIO_ADDR_SHIFT ) & GMAC_MDIO_ADDR_MASK;
 	value |= ( phyreg << GMAC_MDIO_REG_SHIFT ) & GMAC_MDIO_REG_MASK;
 
-	value |= (GMAC_MDIO_CLK_CSR << GMAC_MDIO_CLK_CSR_SHIFT) & GMAC_MDIO_CLK_CSR_MASK;
+	value |= ( GMAC_MDIO_CLK_CSR << GMAC_MDIO_CLK_CSR_SHIFT ) & GMAC_MDIO_CLK_CSR_MASK;
 
 	#if( HAS_GMAC4 != 0 )
 	{
@@ -489,17 +494,21 @@ uint32_t value = MII_BUSY;
 	#endif
 
 	/* Wait until any existing MII operation is complete */
-	if (waitNotBusy(ioaddr + mii_address, 10))
+	if( !waitNotBusy( ioaddr + mii_address, 10 ) )
 	{
 		return -1;
 	}
 
 	/* Set the MII address register to write */
-	writel(phydata, ioaddr + mii_data);
-	writel(value, ioaddr + mii_address);
+	writel( phydata, ioaddr + mii_data );
+	writel( value, ioaddr + mii_address );
 
 	/* Wait until any existing MII operation is complete */
-	return waitNotBusy(ioaddr + mii_address, 10);
+	if( !waitNotBusy( ioaddr + mii_address, 10 ) )
+	{
+		return -1;
+	}
+	return 0;
 }
 
 volatile uint32_t phyIDs[ 10 ];
@@ -512,8 +521,11 @@ EMACDeviceInfo_t hw;
 const int iMacID = 0;
 int phyaddr;
 
-	IOaddr = ulFirstIOAddres( iMacID );
+	IOaddr = ( volatile uint32_t * )ucFirstIOAddres( iMacID );
 	memset( &hw, '\0', sizeof hw );
+
+	dwmac1000_rgsmii( iMacID, &xStats );
+
 	/* Get EMAC-0 out-of the reset state. */
 	pxResetManager->permodrst.emac0 = 0;
 	hw.ps = SPEED_1000;
