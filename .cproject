@@ -75,16 +75,24 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
+					<fileInfo id="cdt.managedbuild.config.gnu.cross.exe.debug.840887560.718739935" name="cyclone_emac.c" rcbsApplicability="disable" resourcePath="FreeRTOS/FreeRTOS-Plus-TCP/portable/NetworkInterface/Cyclone_V_SoC/cyclone_emac.c" toolsToInvoke="cdt.managedbuild.tool.gnu.cross.c.compiler.909202128.2033558478">
+						<tool id="cdt.managedbuild.tool.gnu.cross.c.compiler.909202128.2033558478" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler.909202128"/>
+					</fileInfo>
 					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.debug.840887560.1898015949" name="/" resourcePath="FreeRTOS/FreeRTOS-Plus-TCP/EchoClients">
 						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.debug.517543391" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.debug" unusedChildren="">
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.1982152472.1507570075" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix.1982152472"/>
 							<option id="cdt.managedbuild.option.gnu.cross.path.859871788.2135190547" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path.859871788"/>
-							<tool id="cdt.managedbuild.tool.gnu.cross.c.compiler.2122817532" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler.909202128"/>
+							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.c.compiler.2122817532" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler.909202128">
+								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1827771262" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
+							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.cpp.compiler.1553312073" name="Cross G++ Compiler" superClass="cdt.managedbuild.tool.gnu.cross.cpp.compiler.81973727"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.929198102" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker.451869963"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.cpp.linker.2146953840" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker.372124763"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.archiver.1163010195" name="Cross GCC Archiver" superClass="cdt.managedbuild.tool.gnu.cross.archiver.550935274"/>
-							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.545809366" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler.738229482"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.545809366" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler.738229482">
+								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1092850686" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
+							</tool>
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>

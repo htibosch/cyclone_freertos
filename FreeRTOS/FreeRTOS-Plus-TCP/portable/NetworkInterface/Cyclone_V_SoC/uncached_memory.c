@@ -19,14 +19,7 @@
  * uncached memory.
  */
 
-#include "Zynq/x_emacpsif.h"
-#include "Zynq/x_topology.h"
-#include "xstatus.h"
-
-#include "xparameters.h"
-#include "xparameters_ps.h"
-#include "xil_exception.h"
-#include "xil_mmu.h"
+#include <string.h>
 
 #include "FreeRTOS.h"
 
@@ -34,7 +27,7 @@
 
 #define UNCACHED_MEMORY_SIZE	0x100000ul
 
-#define DDR_MEMORY_END	(XPAR_PS7_DDR_0_S_AXI_HIGHADDR+1)
+#define DDR_MEMORY_END	(0xffff000ul + 0x40000000ul)
 
 static void vInitialiseUncachedMemory( void );
 
@@ -85,7 +78,7 @@ uint8_t *pucReturn;
 	return pucReturn;
 }
 
-extern u8 _end;
+extern uint8_t _end;
 
 static void vInitialiseUncachedMemory( )
 {
@@ -96,7 +89,7 @@ static void vInitialiseUncachedMemory( )
 	 */
 	pucStartOfMemory = (uint8_t *)( ( ( uint32_t )pucStartOfMemory + UNCACHED_MEMORY_SIZE ) & ( ~( UNCACHED_MEMORY_SIZE - 1 ) ) );
 
-	if( ( ( u32 )pucStartOfMemory ) + UNCACHED_MEMORY_SIZE > DDR_MEMORY_END )
+	if( ( ( uint32_t )pucStartOfMemory ) + UNCACHED_MEMORY_SIZE > DDR_MEMORY_END )
 	{
 		vLoggingPrintf("vInitialiseUncachedMemory: Can not allocate uncached memory\n" );
 	}

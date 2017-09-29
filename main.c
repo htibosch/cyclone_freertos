@@ -111,6 +111,8 @@
 
 #include "serial.h"
 
+#include "cyclone_emac.h"
+
 /* mainCREATE_SIMPLE_BLINKY_DEMO_ONLY is used to select between two demo
  * applications, as described at the top of this file.
  *
@@ -161,6 +163,31 @@ array for use by the FreeRTOS handler.  See:
 http://www.freertos.org/Using-FreeRTOS-on-Cortex-A-Embedded-Processors.html. */
 static INT_DISPATCH_t xISRHandlers[ ALT_INT_PROVISION_INT_COUNT ];
 
+/* The default IP and MAC address used by the demo.  The address configuration
+defined here will be used if ipconfigUSE_DHCP is 0, or if ipconfigUSE_DHCP is
+1 but a DHCP server could not be contacted.  See the online documentation for
+more information. */
+static const uint8_t ucIPAddress[ 4 ] = { configIP_ADDR0, configIP_ADDR1, configIP_ADDR2, configIP_ADDR3 };
+static const uint8_t ucNetMask[ 4 ] = { configNET_MASK0, configNET_MASK1, configNET_MASK2, configNET_MASK3 };
+static const uint8_t ucGatewayAddress[ 4 ] = { configGATEWAY_ADDR0, configGATEWAY_ADDR1, configGATEWAY_ADDR2, configGATEWAY_ADDR3 };
+static const uint8_t ucDNSServerAddress[ 4 ] = { configDNS_SERVER_ADDR0, configDNS_SERVER_ADDR1, configDNS_SERVER_ADDR2, configDNS_SERVER_ADDR3 };
+
+/* Default MAC address configuration.  The demo creates a virtual network
+connection that uses this MAC address by accessing the raw Ethernet data
+to and from a real network connection on the host PC.  See the
+configNETWORK_INTERFACE_TO_USE definition for information on how to configure
+the real network connection to use. */
+
+/* 00:11:22:33:44:49 */
+const uint8_t ucMACAddress[ 6 ] = { configMAC_ADDR0, configMAC_ADDR1, configMAC_ADDR2, configMAC_ADDR3, configMAC_ADDR4, configMAC_ADDR5 };
+
+/* Use by the pseudo random number generator. */
+static UBaseType_t ulNextRand;
+
+#define RECEIVE_TASK_STACK_SIZE		640
+#define RECEIVE_TASK_PRIORITY		2
+
+static void prvQueueReceiveTask( void *pvParameter );
 /*-----------------------------------------------------------*/
 
 int main( void )
@@ -172,20 +199,41 @@ int main( void )
 
 	/* The mainSELECTED_APPLICATION setting is described at the top
 	of this file. */
-	#if( mainCREATE_SIMPLE_BLINKY_DEMO_ONLY == 1 )
-	{
-		main_blinky();
-	}
-	#else
-	{
-		main_full();
-	}
-	#endif
+
+	xTaskCreate( prvQueueReceiveTask,				/* The function that implements the task. */
+				"Rx", 								/* The text name assigned to the task - for debug only as it is not used by the kernel. */
+				RECEIVE_TASK_STACK_SIZE, 			/* The size of the stack to allocate to the task. */
+				NULL, 								/* The parameter passed to the task - not used in this case. */
+				RECEIVE_TASK_PRIORITY,			 	/* The priority assigned to the task. */
+				NULL );								/* The task handle is not required, so NULL is passed. */
+
+
+	/* Start the tasks and timer running. */
+	vTaskStartScheduler();
+
+	/* If all is well, the scheduler will now be running, and the following
+	line will never be reached.  If the following line does execute, then
+	there was either insufficient FreeRTOS heap memory available for the idle
+	and/or timer tasks to be created, or vTaskStartScheduler() was called from
+	User mode.  See the memory management section on the FreeRTOS web site for
+	more details on the FreeRTOS heap http://www.freertos.org/a00111.html.  The
+	mode from which main() is called is set in the C start up code and must be
+	a privileged mode (not user mode). */
+	for( ;; );
 
 	/* Don't expect to reach here. */
 	return 0;
 }
 /*-----------------------------------------------------------*/
+
+static void prvQueueReceiveTask( void *pvParameter )
+{
+	dwmac1000_sys_init();
+	for( ;; )
+	{
+		vTaskDelay( 1000 );
+	}
+}
 
 static void prvSetupHardware( void )
 {
@@ -210,6 +258,7 @@ const uint32_t ulVBit = 13U;
 	parallel port test. */
 	vParTestInitialise();
 }
+
 /*-----------------------------------------------------------*/
 
 void vApplicationMallocFailedHook( void )

@@ -232,5 +232,91 @@ Cyclone V SoC. */
 #define configINTERRUPT_CONTROLLER_CPU_INTERFACE_OFFSET ( -0xf00 )
 #define configUNIQUE_INTERRUPT_PRIORITIES				32
 
-#endif /* FREERTOS_CONFIG_H */
+/* MAC address configuration.  In a deployed production system this would
+probably be read from an EEPROM.  In the demo it is just hard coded.  Make sure
+each node on the network has a unique MAC address. */
+#define configMAC_ADDR0		0x00
+#define configMAC_ADDR1		0x11
+#define configMAC_ADDR2		0x22
+#define configMAC_ADDR3		0x33
+#define configMAC_ADDR4		0x44
+#define configMAC_ADDR5		0x49
 
+/* Default IP address configuration.  Used in case ipconfigUSE_DHCP is set to 0, or
+ipconfigUSE_DHCP is set to 1 but a DHCP server cannot be contacted. */
+#define configIP_ADDR0		192	// ping -n 1000000 192.168.2.124
+#define configIP_ADDR1		168
+#define configIP_ADDR2		2
+#define configIP_ADDR3		124
+
+/* Default gateway IP address configuration.  Used in case ipconfigUSE_DHCP is
+set to 0, or ipconfigUSE_DHCP is set to 1 but a DHCP server cannot be contacted. */
+#define configGATEWAY_ADDR0	192
+#define configGATEWAY_ADDR1	168
+#define configGATEWAY_ADDR2	2
+#define configGATEWAY_ADDR3	1
+
+/* Default DNS server configuration.  OpenDNS addresses are 208.67.222.222 and
+208.67.220.220.  Used if ipconfigUSE_DHCP is set to 0, or ipconfigUSE_DHCP is set
+to 1 but a DHCP server cannot be contacted.*/
+#define configDNS_SERVER_ADDR0 	208
+#define configDNS_SERVER_ADDR1 	67
+#define configDNS_SERVER_ADDR2 	222
+#define configDNS_SERVER_ADDR3 	222
+
+/* Default netmask configuration.  Used in case ipconfigUSE_DHCP is set to 0,
+or ipconfigUSE_DHCP is set to 1 but a DHCP server cannot be contacted. */
+#define configNET_MASK0		255
+#define configNET_MASK1		255
+#define configNET_MASK2		255
+#define configNET_MASK3		0
+
+/* The address of an echo server that will be used by the two demo echo client
+tasks.
+http://www.FreeRTOS.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/TCPIP_FAT_Examples_Atmel_SAM4E.html */
+#define configECHO_SERVER_ADDR0	192
+#define configECHO_SERVER_ADDR1 168
+#define configECHO_SERVER_ADDR2 2
+#define configECHO_SERVER_ADDR3 3
+
+
+#define configHTTP_ROOT "/websrc"
+
+/****** UDP logging settings. *************************************************/
+
+/* If set to 1 then each message sent via the UDP logging facility will end
+with \r\n.  If set to 0 then each message sent via the UDP logging facility will
+end with \n. */
+#define configUDP_LOGGING_NEEDS_CR_LF  ( 0 )
+
+/* Sets the maximum length for a string sent via the UDP logging facility. */
+#define configUDP_LOGGING_STRING_LENGTH	( 200 )
+
+/* The UDP logging facility buffers messages until the UDP logging task is able
+to transmit them.  configUDP_LOGGING_MAX_MESSAGES_IN_BUFFER sets the maximum
+number of messages that can be buffered at any one time. */
+#define	configUDP_LOGGING_MAX_MESSAGES_IN_BUFFER	( 20 )
+
+/* The UDP logging facility creates a task to send buffered messages to the UDP
+port.  configUDP_LOGGING_TASK_STACK_SIZE sets the task's stack size. */
+#define	configUDP_LOGGING_TASK_STACK_SIZE  	( 512 )
+
+/* The UDP logging facility creates a task to send buffered messages to the UDP
+port.  configUDP_LOGGING_TASK_PRIORITY sets the task's priority.  It is
+suggested to give the task a low priority to ensure it does not adversely effect
+the performance of other TCP/IP stack activity. */
+#define configUDP_LOGGING_TASK_PRIORITY   	( tskIDLE_PRIORITY  + 2 )
+
+/* The UDP port to which the UDP logging facility sends messages. */
+#define configUDP_LOGGING_PORT_REMOTE		2403
+
+/* The local UDP port to which commands can be sent. */
+#define configUDP_LOGGING_PORT_LOCAL		2402
+
+/* Here it is possible to define the target IP address to send all UDP
+logging as e.g.:
+
+If not defined, the local broadcast address will be used, e.g. 192.168.0.255
+*/
+
+#endif /* FREERTOS_CONFIG_H */
