@@ -20,6 +20,10 @@
 
 #define RESET_MANAGER_ADDR		0xFFD05000
 
+#ifndef ARRAY_SIZE
+	#define ARRAY_SIZE(x)	(BaseType_t)(sizeof(x)/sizeof(x)[0])
+#endif
+
 static ALT_RSTMGR_t *pxResetManager = ( ALT_RSTMGR_t * ) RESET_MANAGER_ADDR;
 
 extern const uint8_t ucMACAddress[ 6 ];
@@ -55,6 +59,15 @@ uint8_t *ucReturn;
 		ucReturn = ( uint8_t * )NULL;
 	}
 	return ucReturn;
+}
+
+uint32_t dwmac1000_read_version( int iMacID )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+uint32_t value;
+
+	value = readl(ioaddr + GMAC_VERSION);
+	return value;
 }
 
 void dwmac1000_core_init(int iMacID, EMACDeviceInfo_t *hw, int mtu)
@@ -277,18 +290,26 @@ uint32_t value;
 
 	value = readl(ioaddr + GMAC_AN_CTRL(reg));
 
+	value &= ~( GMAC_AN_CTRL_ANE | GMAC_AN_CTRL_RAN | GMAC_AN_CTRL_SGMRAL | GMAC_AN_CTRL_ELE );
+
 	/* Enable and restart the Auto-Negotiation */
 	if (ane)
+	{
 		value |= GMAC_AN_CTRL_ANE | GMAC_AN_CTRL_RAN;
+	}
 
 	/* In case of MAC-2-MAC connection, block is configured to operate
 	 * according to MAC conf register.
 	 */
 	if (srgmi_ral)
+	{
 		value |= GMAC_AN_CTRL_SGMRAL;
+	}
 
 	if (loopback)
+	{
 		value |= GMAC_AN_CTRL_ELE;
+	}
 
 	writel(value, ioaddr + GMAC_AN_CTRL(reg));
 }
@@ -397,7 +418,23 @@ uint32_t status;
 #define	STMMAC_CSR_150_250M	0x4	/* MDC = clk_scr_i/102 */
 #define	STMMAC_CSR_250_300M	0x5	/* MDC = clk_scr_i/122 */
 
-#define GMAC_MDIO_CLK_CSR			STMMAC_CSR_60_100M
+// 0x0 l4_mp_clk 60-100Mhz and MDC clock = l4_mp_clk/42
+// 0x1 l4_mp_clk 100-150Mhz and MDC clock = l4_mp_clk/62
+// 0x2 l4_mp_clk 25-35Mhz and MDC clock = l4_mp_clk/16
+// 0x3 l4_mp_clk 35-60Mhz and MDC clock = l4_mp_clk/26
+// 0x4 l4_mp_clk 150-250Mhz and MDC clock = l4_mp_clk/102
+// 0x5 l4_mp_clk 250-300Mhz and MDC clock = l4_mp_clk/124
+// 0x8 l4_mp_clk/4
+// 0x9 l4_mp_clk/6
+// 0xa l4_mp_clk/8
+// 0xb l4_mp_clk/10
+// 0xc l4_mp_clk/12
+// 0xd l4_mp_clk/14
+// 0xe l4_mp_clk/16
+// 0xf l4_mp_clk/18
+
+static uint32_t l4_mp_clk;
+#define GMAC_MDIO_CLK_CSR			STMMAC_CSR_100_150M
 
 #define MII_BUSY		0x00000001
 #define MII_WRITE		0x00000002
@@ -511,34 +548,87 @@ uint32_t value = MII_BUSY;
 	return 0;
 }
 
-volatile uint32_t phyIDs[ 10 ];
+volatile uint32_t phyIDs[ 8 ];
 volatile uint32_t *IOaddr;
+volatile uint16_t ulLowerID, ulUpperID;
+
+#include "socal/alt_sysmgr.h"
+#include "socal/hps.h"
+
+ALT_SYSMGR_t *systemManager = ( ALT_SYSMGR_t * )ALT_SYSMGR_OFST;
 
 void dwmac1000_sys_init()
 {
 EMACStats_t xStats;
 EMACDeviceInfo_t hw;
-const int iMacID = 0;
-int phyaddr;
+const int iMacID = 1;
+int phyaddr, clockidx;
+uint32_t ulVersion;
+
+	ulVersion = systemManager->pinmuxgrp.EMACIO0.sel;               /* ALT_SYSMGR_PINMUX_EMACIO0 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO1.sel;               /* ALT_SYSMGR_PINMUX_EMACIO1 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO2.sel;               /* ALT_SYSMGR_PINMUX_EMACIO2 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO3.sel;               /* ALT_SYSMGR_PINMUX_EMACIO3 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO4.sel;               /* ALT_SYSMGR_PINMUX_EMACIO4 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO5.sel;               /* ALT_SYSMGR_PINMUX_EMACIO5 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO6.sel;               /* ALT_SYSMGR_PINMUX_EMACIO6 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO7.sel;               /* ALT_SYSMGR_PINMUX_EMACIO7 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO8.sel;               /* ALT_SYSMGR_PINMUX_EMACIO8 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO9.sel;               /* ALT_SYSMGR_PINMUX_EMACIO9 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO10.sel;              /* ALT_SYSMGR_PINMUX_EMACIO10 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO11.sel;              /* ALT_SYSMGR_PINMUX_EMACIO11 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO12.sel;              /* ALT_SYSMGR_PINMUX_EMACIO12 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO13.sel;              /* ALT_SYSMGR_PINMUX_EMACIO13 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO14.sel;              /* ALT_SYSMGR_PINMUX_EMACIO14 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO15.sel;              /* ALT_SYSMGR_PINMUX_EMACIO15 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO16.sel;              /* ALT_SYSMGR_PINMUX_EMACIO16 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO17.sel;              /* ALT_SYSMGR_PINMUX_EMACIO17 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO18.sel;              /* ALT_SYSMGR_PINMUX_EMACIO18 */
+    ulVersion = systemManager->pinmuxgrp.EMACIO19.sel;              /* ALT_SYSMGR_PINMUX_EMACIO19 */
 
 	IOaddr = ( volatile uint32_t * )ucFirstIOAddres( iMacID );
 	memset( &hw, '\0', sizeof hw );
 
-	dwmac1000_rgsmii( iMacID, &xStats );
-
+	pxResetManager->permodrst.emac0 = 1;
+	vTaskDelay( 100 );
 	/* Get EMAC-0 out-of the reset state. */
 	pxResetManager->permodrst.emac0 = 0;
+	pxResetManager->permodrst.dma = 0;
+	vTaskDelay( 100 );
+
+	for( phyaddr = 0; phyaddr < ARRAY_SIZE( phyIDs ); phyaddr++ )
+	{
+		ulUpperID = stmmac_mdio_read( iMacID, phyaddr, 2 );
+		ulLowerID = stmmac_mdio_read( iMacID, phyaddr, 3 );
+		phyIDs[ phyaddr ] = ( ( ( uint32_t ) ulUpperID ) << 16 ) | ( ulLowerID & 0xFFF0 );
+		if( ( ulUpperID != 0xffffu ) && ( ulLowerID != 0xffffu ) )
+		{
+			pr_info( "phy %d found\n", phyaddr );
+		}
+	}
+
+	ulVersion = dwmac1000_read_version( iMacID );
+
+#define GMAC_EXPECTED_VERSION	0x1037ul
+	if( ulVersion != GMAC_EXPECTED_VERSION )
+	{
+		pr_info( "Wrong version : %04lX ( expected %04lX )\n", ulVersion, GMAC_EXPECTED_VERSION );
+		return;
+	}
+
+	dwmac1000_rgsmii( iMacID, &xStats );
+
 	hw.ps = SPEED_1000;
 	dwmac1000_core_init( iMacID, &hw, 1500u );
-	stmmac_set_mac( iMacID, 1 );
-	dwmac1000_rx_ipc_enable( iMacID, true );
+	stmmac_set_mac( iMacID, pdTRUE );
+	dwmac1000_rx_ipc_enable( iMacID, pdTRUE );
 
 	/* Write the main MAC address at position 0 */
 	dwmac1000_set_umac_addr( iMacID, ucMACAddress, 0 );
 
 	dwmac1000_reset_eee_mode( iMacID );
 	vTaskDelay( 100 );
-	/* Enable the link status receive on RGMII, SGMII ore SMII
+	/* Enable the link status receive on RGMII, SGMII or SMII
 	 * receive path and instruct the transmit to enter in LPI
 	 * state.
 	 */
@@ -553,15 +643,13 @@ int phyaddr;
 	 */
 	dwmac1000_set_eee_timer( iMacID, 1000, 1000 );
 
-	dwmac1000_set_eee_pls_enable( iMacID, pdFALSE );
+	dwmac1000_set_eee_pls( iMacID, pdFALSE );
+	dwmac1000_set_eee_pls_enable( iMacID, pdTRUE );
+
 	dwmac1000_ctrl_ane( iMacID, pdTRUE, pdFALSE, pdFALSE );
 
 	dwmac1000_rane( iMacID, pdTRUE );
 	vTaskDelay( 4000 );
 
-	for( phyaddr = 0; phyaddr < 10; phyaddr++ )
-	{
-		phyIDs[ phyaddr ] = stmmac_mdio_read( iMacID, phyaddr, 2 );
-	}
 	dwmac1000_rgsmii( iMacID, &xStats );
 }
