@@ -26,6 +26,7 @@
 								<option id="gnu.c.compiler.option.debugging.level.972637953" name="Debug Level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.include.paths.291093471" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/FreeRTOS/FreeRTOS_v9.0.0/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/FreeRTOS/utilities/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/FreeRTOS/FreeRTOS-Plus-TCP/portable/NetworkInterface}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/FreeRTOS/FreeRTOS-Plus-TCP/portable/NetworkInterface/Cyclone_V_SoC}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/FreeRTOS/FreeRTOS-Plus-TCP/portable/Compiler/GCC}&quot;"/>
@@ -75,9 +76,6 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
-					<fileInfo id="cdt.managedbuild.config.gnu.cross.exe.debug.840887560.718739935" name="cyclone_emac.c" rcbsApplicability="disable" resourcePath="FreeRTOS/FreeRTOS-Plus-TCP/portable/NetworkInterface/Cyclone_V_SoC/cyclone_emac.c" toolsToInvoke="cdt.managedbuild.tool.gnu.cross.c.compiler.909202128.2033558478">
-						<tool id="cdt.managedbuild.tool.gnu.cross.c.compiler.909202128.2033558478" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler.909202128"/>
-					</fileInfo>
 					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.debug.840887560.1898015949" name="/" resourcePath="FreeRTOS/FreeRTOS-Plus-TCP/EchoClients">
 						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.debug.517543391" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.debug" unusedChildren="">
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.1982152472.1507570075" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix.1982152472"/>

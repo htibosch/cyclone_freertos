@@ -421,3 +421,45 @@ alt_int_callback_t pxISR;
 		pxISR( ulICCIAR, pvContext );
 	}
 }
+
+extern void vOutputChar( const char cChar, const TickType_t xTicksToWait  );
+void vOutputChar( const char cChar, const TickType_t xTicksToWait  )
+{
+	/* printf-stdarg.c needs this function. */
+}
+
+#define KILO_BYTE						( 1024u )
+#define MEGA_BYTE						( KILO_BYTE * KILO_BYTE )
+
+#define BOOT_ROM_ORIGIN					( 0xfffd0000 )
+#define BOOT_ROM_LENGTH					( 64*1024 )
+
+#define ON_CHIP_RAM_ORIGIN				( 0xffff0000 )
+#define ON_CHIP_RAM_LENGTH				( 64*1024 )
+
+#define SD_RAM_ORIGIN					( 0x00100000 )
+#define SD_RAM_LENGTH					( 1023 * MEGA_BYTE )
+
+#define IN_RANGE( ADDR, START, LEN )	( ( ADDR >= START ) && ( ADDR < START + LEN ) )
+
+//  boot_rom (rx) : ORIGIN = 0xfffd0000, LENGTH = 64K
+//  oc_ram (rwx) : ORIGIN = 0xffff0000, LENGTH = 64K
+//  ram (rwx) : ORIGIN = 0x100000, LENGTH = 1023M
+
+extern BaseType_t xApplicationMemoryPermissions( uint32_t aAddress );
+BaseType_t xApplicationMemoryPermissions( uint32_t aAddress )
+{
+	if( IN_RANGE( aAddress, BOOT_ROM_ORIGIN, BOOT_ROM_LENGTH ) )
+	{
+		return 1;
+	}
+	if( IN_RANGE( aAddress, SD_RAM_ORIGIN, ON_CHIP_RAM_LENGTH ) )
+	{
+		return 3;
+	}
+	if( IN_RANGE( aAddress, ON_CHIP_RAM_ORIGIN, ON_CHIP_RAM_LENGTH ) )
+	{
+		return 3;
+	}
+	return 0;
+}

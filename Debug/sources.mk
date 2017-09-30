@@ -21,5 +21,6 @@ FreeRTOS/FreeRTOS-Plus-TCP/portable/NetworkInterface/Cyclone_V_SoC \
 FreeRTOS/FreeRTOS_v9.0.0 \
 FreeRTOS/FreeRTOS_v9.0.0/portable/GCC/ARM_CA9 \
 FreeRTOS/FreeRTOS_v9.0.0/portable/MemMang \
+FreeRTOS/utilities \
 . \
 

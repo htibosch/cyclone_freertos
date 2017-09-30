@@ -14,9 +14,12 @@
 #include "queue.h"
 #include "semphr.h"
 
+#include "cyclone_dma.h"
 #include "cyclone_emac.h"
 
 #include "socal/alt_rstmgr.h"
+
+#include "UDPLoggingPrintf.h"
 
 #define RESET_MANAGER_ADDR		0xFFD05000
 
@@ -24,42 +27,27 @@
 	#define ARRAY_SIZE(x)	(BaseType_t)(sizeof(x)/sizeof(x)[0])
 #endif
 
-static ALT_RSTMGR_t *pxResetManager = ( ALT_RSTMGR_t * ) RESET_MANAGER_ADDR;
+/* The lowest 8 bits contain the IP's version number. We expect 0x37. */
+#define HAS_GMAC4		( ( ulEMACVersion & 0xff ) >= 0x40 )
+
+// static ALT_RSTMGR_t *pxResetManager = ( ALT_RSTMGR_t * ) RESET_MANAGER_ADDR;
+
+__attribute__ ( ( aligned( 32 ) ) ) gmac_tx_descriptor_t txDescriptors[ GMAC_TX_BUFFERS ];
+__attribute__ ( ( aligned( 32 ) ) ) gmac_rx_descriptor_t rxDescriptors[ GMAC_RX_BUFFERS ];
+
+//COMPILER_ALIGNED(8)
+//static gmac_tx_descriptor_t gs_tx_desc[ GMAC_TX_BUFFERS ];
+//#if( GMAC_USES_TX_CALLBACK != 0 )
+///** TX callback lists */
+//static gmac_dev_tx_cb_t gs_tx_callback[ GMAC_TX_BUFFERS ];
+//#endif
+///** RX descriptors lists */
+//COMPILER_ALIGNED(8)
+//static gmac_rx_descriptor_t gs_rx_desc[ GMAC_RX_BUFFERS ];
 
 extern const uint8_t ucMACAddress[ 6 ];
 
-static void pr_info( const char *pcFormat, ... )
-{
-}
-
-static uint32_t readl( uint8_t *pucAddress )
-{
-	return *( ( volatile uint32_t *) pucAddress );
-}
-
-static void writel( uint32_t ulValue, uint8_t *pucAddress )
-{
-	*( ( volatile uint32_t *) pucAddress ) = ulValue;
-}
-
-static uint8_t *ucFirstIOAddres(int iMacID)
-{
-uint8_t *ucReturn;
-
-	if( iMacID == 0 )
-	{
-		ucReturn = ( uint8_t * )EMAC_ID_0_ADDRESS;
-	}
-	else if( iMacID == 1 )
-	{
-		ucReturn = ( uint8_t * )EMAC_ID_1_ADDRESS;
-	}
-	else
-	{
-		ucReturn = ( uint8_t * )NULL;
-	}
-	return ucReturn;
-}
+uint32_t ulEMACVersion;
 
 uint32_t dwmac1000_read_version( int iMacID )
 {
@@ -370,16 +358,16 @@ uint32_t status;
 
 		pxStats->pcs_duplex = (status & GMAC_RGSMIIIS_LNKMOD_MASK);
 
-		pr_info("Link is Up - %d/%s\n", (int)pxStats->pcs_speed,
+		lUDPLoggingPrintf("Link is Up - %d/%s\n", (int)pxStats->pcs_speed,
 			pxStats->pcs_duplex ? "Full" : "Half");
 	} else {
 		pxStats->pcs_link = 0;
-		pr_info("Link is Down\n");
+		lUDPLoggingPrintf("Link is Down\n");
 	}
 }
 
 /**
- * stmmac_mdio_read
+ * gmac_mdio_read
  * @bus: points to the mii_bus structure
  * @phyaddr: MII addr
  * @phyreg: MII reg
@@ -418,26 +406,15 @@ uint32_t status;
 #define	STMMAC_CSR_150_250M	0x4	/* MDC = clk_scr_i/102 */
 #define	STMMAC_CSR_250_300M	0x5	/* MDC = clk_scr_i/122 */
 
-// 0x0 l4_mp_clk 60-100Mhz and MDC clock = l4_mp_clk/42
-// 0x1 l4_mp_clk 100-150Mhz and MDC clock = l4_mp_clk/62
-// 0x2 l4_mp_clk 25-35Mhz and MDC clock = l4_mp_clk/16
-// 0x3 l4_mp_clk 35-60Mhz and MDC clock = l4_mp_clk/26
-// 0x4 l4_mp_clk 150-250Mhz and MDC clock = l4_mp_clk/102
-// 0x5 l4_mp_clk 250-300Mhz and MDC clock = l4_mp_clk/124
-// 0x8 l4_mp_clk/4
-// 0x9 l4_mp_clk/6
-// 0xa l4_mp_clk/8
-// 0xb l4_mp_clk/10
-// 0xc l4_mp_clk/12
-// 0xd l4_mp_clk/14
-// 0xe l4_mp_clk/16
-// 0xf l4_mp_clk/18
-
-static uint32_t l4_mp_clk;
 #define GMAC_MDIO_CLK_CSR			STMMAC_CSR_100_150M
 
 #define MII_BUSY		0x00000001
 #define MII_WRITE		0x00000002
+
+/* GMAC4 defines */
+#define MII_GMAC4_GOC_SHIFT		2
+#define MII_GMAC4_WRITE			(1 << MII_GMAC4_GOC_SHIFT)
+#define MII_GMAC4_READ			(3 << MII_GMAC4_GOC_SHIFT)
 
 static int waitNotBusy( uint8_t *pucAddress, uint32_t timeout_ms )
 {
@@ -461,7 +438,7 @@ TickType_t xStart = xTaskGetTickCount(), xEnd;
 	return 1;
 }
 
-static int stmmac_mdio_read( int iMacID, int phyaddr, int phyreg)
+static int gmac_mdio_read( int iMacID, int phyaddr, int phyreg)
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t mii_address = GMAC_MII_ADDR;
@@ -473,15 +450,16 @@ uint32_t value = MII_BUSY;
 
 	value |= ( phyreg << GMAC_MDIO_REG_SHIFT ) & GMAC_MDIO_REG_MASK;
 	value |= ( GMAC_MDIO_CLK_CSR << GMAC_MDIO_CLK_CSR_SHIFT ) & GMAC_MDIO_CLK_CSR_MASK;
-	#if( HAS_GMAC4 != 0 )
+
+	if( HAS_GMAC4 != 0 )
 	{
 		value |= MII_GMAC4_READ;
 	}
-	#else
+	else
 	{
 		/* bit-1 remains zero when reading. */
 	}
-	#endif
+
 	if( !waitNotBusy( ioaddr + mii_address, 10 ) )
 	{
 		return -1;
@@ -501,14 +479,14 @@ uint32_t value = MII_BUSY;
 }
 
 /**
- * stmmac_mdio_write
+ * gmac_mdio_write
  * @bus: points to the mii_bus structure
  * @phyaddr: MII addr
  * @phyreg: MII reg
  * @phydata: phy data
  * Description: it writes the data into the MII register from within the device.
  */
-static int stmmac_mdio_write( int iMacID, int phyaddr, int phyreg, uint16_t phydata )
+static int gmac_mdio_write( int iMacID, int phyaddr, int phyreg, uint16_t phydata )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t mii_address = GMAC_MII_ADDR;
@@ -520,15 +498,14 @@ uint32_t value = MII_BUSY;
 
 	value |= ( GMAC_MDIO_CLK_CSR << GMAC_MDIO_CLK_CSR_SHIFT ) & GMAC_MDIO_CLK_CSR_MASK;
 
-	#if( HAS_GMAC4 != 0 )
+	if( HAS_GMAC4 != 0 )
 	{
 		value |= MII_GMAC4_WRITE;
 	}
-	#else
+	else
 	{
 		value |= MII_WRITE;
 	}
-	#endif
 
 	/* Wait until any existing MII operation is complete */
 	if( !waitNotBusy( ioaddr + mii_address, 10 ) )
@@ -557,62 +534,114 @@ volatile uint16_t ulLowerID, ulUpperID;
 
 ALT_SYSMGR_t *systemManager = ( ALT_SYSMGR_t * )ALT_SYSMGR_OFST;
 
+volatile uint8_t desc_copy[ sizeof( gmac_tx_descriptor_t ) ];
+
 void dwmac1000_sys_init()
 {
 EMACStats_t xStats;
 EMACDeviceInfo_t hw;
 const int iMacID = 1;
-int phyaddr, clockidx;
-uint32_t ulVersion;
+int phyaddr, iIndex;
 
-	ulVersion = systemManager->pinmuxgrp.EMACIO0.sel;               /* ALT_SYSMGR_PINMUX_EMACIO0 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO1.sel;               /* ALT_SYSMGR_PINMUX_EMACIO1 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO2.sel;               /* ALT_SYSMGR_PINMUX_EMACIO2 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO3.sel;               /* ALT_SYSMGR_PINMUX_EMACIO3 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO4.sel;               /* ALT_SYSMGR_PINMUX_EMACIO4 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO5.sel;               /* ALT_SYSMGR_PINMUX_EMACIO5 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO6.sel;               /* ALT_SYSMGR_PINMUX_EMACIO6 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO7.sel;               /* ALT_SYSMGR_PINMUX_EMACIO7 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO8.sel;               /* ALT_SYSMGR_PINMUX_EMACIO8 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO9.sel;               /* ALT_SYSMGR_PINMUX_EMACIO9 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO10.sel;              /* ALT_SYSMGR_PINMUX_EMACIO10 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO11.sel;              /* ALT_SYSMGR_PINMUX_EMACIO11 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO12.sel;              /* ALT_SYSMGR_PINMUX_EMACIO12 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO13.sel;              /* ALT_SYSMGR_PINMUX_EMACIO13 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO14.sel;              /* ALT_SYSMGR_PINMUX_EMACIO14 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO15.sel;              /* ALT_SYSMGR_PINMUX_EMACIO15 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO16.sel;              /* ALT_SYSMGR_PINMUX_EMACIO16 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO17.sel;              /* ALT_SYSMGR_PINMUX_EMACIO17 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO18.sel;              /* ALT_SYSMGR_PINMUX_EMACIO18 */
-    ulVersion = systemManager->pinmuxgrp.EMACIO19.sel;              /* ALT_SYSMGR_PINMUX_EMACIO19 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO0.sel;               /* ALT_SYSMGR_PINMUX_EMACIO0 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO1.sel;               /* ALT_SYSMGR_PINMUX_EMACIO1 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO2.sel;               /* ALT_SYSMGR_PINMUX_EMACIO2 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO3.sel;               /* ALT_SYSMGR_PINMUX_EMACIO3 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO4.sel;               /* ALT_SYSMGR_PINMUX_EMACIO4 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO5.sel;               /* ALT_SYSMGR_PINMUX_EMACIO5 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO6.sel;               /* ALT_SYSMGR_PINMUX_EMACIO6 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO7.sel;               /* ALT_SYSMGR_PINMUX_EMACIO7 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO8.sel;               /* ALT_SYSMGR_PINMUX_EMACIO8 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO9.sel;               /* ALT_SYSMGR_PINMUX_EMACIO9 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO10.sel;              /* ALT_SYSMGR_PINMUX_EMACIO10 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO11.sel;              /* ALT_SYSMGR_PINMUX_EMACIO11 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO12.sel;              /* ALT_SYSMGR_PINMUX_EMACIO12 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO13.sel;              /* ALT_SYSMGR_PINMUX_EMACIO13 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO14.sel;              /* ALT_SYSMGR_PINMUX_EMACIO14 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO15.sel;              /* ALT_SYSMGR_PINMUX_EMACIO15 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO16.sel;              /* ALT_SYSMGR_PINMUX_EMACIO16 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO17.sel;              /* ALT_SYSMGR_PINMUX_EMACIO17 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO18.sel;              /* ALT_SYSMGR_PINMUX_EMACIO18 */
+//	ulVersion = systemManager->pinmuxgrp.EMACIO19.sel;              /* ALT_SYSMGR_PINMUX_EMACIO19 */
 
 	IOaddr = ( volatile uint32_t * )ucFirstIOAddres( iMacID );
 	memset( &hw, '\0', sizeof hw );
 
-	pxResetManager->permodrst.emac0 = 1;
-	vTaskDelay( 100 );
-	/* Get EMAC-0 out-of the reset state. */
-	pxResetManager->permodrst.emac0 = 0;
-	pxResetManager->permodrst.dma = 0;
-	vTaskDelay( 100 );
+//	We are using EMAC-1 which is in a running state already.
+
+	{
+		/* The value 1 is either stored as 0x00, 0x01 (big) or 0x01, 0x00 (little endian). */
+		uint16_t usWord = 1;
+		/* Peek the contents with a byte poniter. */
+		uint8_t *pucByte = ( uint8_t * )&usWord;
+		#if( ipconfigBYTE_ORDER == pdFREERTOS_BIG_ENDIAN )
+		/* The first byte is a 0x00. */
+		uint8_t ucExpected = 0;
+		#elif( ipconfigBYTE_ORDER == pdFREERTOS_LITTLE_ENDIAN )
+		/* The first byte is a 0x01. */
+		uint8_t ucExpected = 1;
+		#else
+			#error ipconfigBYTE_ORDER should be defined as either 
+		#endif
+		configASSERT( *( pucByte ) == ucExpected );
+		FreeRTOS_printf( ( "Endianness is %s\n", *( pucByte ) == ucExpected ? "Ok" : "Wrong" ) );
+	}
+
+	{
+		gmac_tx_descriptor_t desc;
+		memset( &desc, '\0', sizeof desc );
+		desc.own = 1;
+		memcpy( ( char * )desc_copy, &desc, sizeof desc_copy );
+	}
+
+	struct stmmac_axi xAXI;
+	memset( &xAXI, '\0', sizeof xAXI );
+	for( iIndex = 0; iIndex < ARRAY_SIZE( xAXI.axi_blen ); iIndex++ )
+	{
+		/* Get an array of 4, 8, 16, 32, 64, 128, and 256. */
+		xAXI.axi_blen[ iIndex ] = 0x04u << iIndex;
+	}
+	/* AXI Maximum Write OutStanding Request Limit. */
+	xAXI.axi_wr_osr_lmt = 1;
+	/* This value limits the maximum outstanding request
+	 * on the AXI read interface. Maximum outstanding
+	 * requests = RD_OSR_LMT+1 */
+	xAXI.axi_rd_osr_lmt = 1;
+	/* When set to 1, this bit enables the LPI mode */
+	xAXI.axi_lpi_en = 1;
+
+	/*  1 KB Boundary Crossing Enable for the GMAC-AXI
+	 * Master When set, the GMAC-AXI Master performs
+	 * burst transfers that do not cross 1 KB boundary.
+	 * When reset, the GMAC-AXI Master performs burst
+	 * transfers that do not cross 4 KB boundary.*/
+	xAXI.axi_kbbe = 0;
+	/* When set to 1, this bit enables the GMAC-AXI to
+	 * come out of the LPI mode only when the Remote
+	 * Wake Up Packet is received. When set to 0, this bit
+	 * enables the GMAC-AXI to come out of LPI mode
+	 * when any frame is received. This bit must be set to 0. */
+	xAXI.axi_xit_frm = 0;
+
+	dwmac1000_dma_axi( iMacID, &xAXI );
 
 	for( phyaddr = 0; phyaddr < ARRAY_SIZE( phyIDs ); phyaddr++ )
 	{
-		ulUpperID = stmmac_mdio_read( iMacID, phyaddr, 2 );
-		ulLowerID = stmmac_mdio_read( iMacID, phyaddr, 3 );
+		ulUpperID = gmac_mdio_read( iMacID, phyaddr, 2 );
+		ulLowerID = gmac_mdio_read( iMacID, phyaddr, 3 );
 		phyIDs[ phyaddr ] = ( ( ( uint32_t ) ulUpperID ) << 16 ) | ( ulLowerID & 0xFFF0 );
 		if( ( ulUpperID != 0xffffu ) && ( ulLowerID != 0xffffu ) )
 		{
-			pr_info( "phy %d found\n", phyaddr );
+			lUDPLoggingPrintf( "phy %d found\n", phyaddr );
 		}
 	}
 
-	ulVersion = dwmac1000_read_version( iMacID );
+	ulEMACVersion = dwmac1000_read_version( iMacID );
 
 #define GMAC_EXPECTED_VERSION	0x1037ul
-	if( ulVersion != GMAC_EXPECTED_VERSION )
+	if( ulEMACVersion != GMAC_EXPECTED_VERSION )
 	{
-		pr_info( "Wrong version : %04lX ( expected %04lX )\n", ulVersion, GMAC_EXPECTED_VERSION );
+		lUDPLoggingPrintf( "Wrong version : %04lX ( expected %04lX )\n", ulEMACVersion, GMAC_EXPECTED_VERSION );
 		return;
 	}
 

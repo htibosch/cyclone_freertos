@@ -211,4 +211,33 @@ void dwmac1000_sys_init(void);
 void dwmac1000_rgsmii(int iMacID, EMACStats_t *pxStats);
 void dwmac1000_core_init(int iMacID, EMACDeviceInfo_t *hw, int mtu);
 
+static __inline uint8_t *ucFirstIOAddres(int iMacID)
+{
+uint8_t *ucReturn;
+
+	if( iMacID == 0 )
+	{
+		ucReturn = ( uint8_t * )EMAC_ID_0_ADDRESS;
+	}
+	else if( iMacID == 1 )
+	{
+		ucReturn = ( uint8_t * )EMAC_ID_1_ADDRESS;
+	}
+	else
+	{
+		ucReturn = ( uint8_t * )NULL;
+	}
+	return ucReturn;
+}
+
+static __inline uint32_t readl( uint8_t *pucAddress )
+{
+	return *( ( volatile uint32_t *) pucAddress );
+}
+
+static __inline void writel( uint32_t ulValue, uint8_t *pucAddress )
+{
+	*( ( volatile uint32_t *) pucAddress ) = ulValue;
+}
+
 #endif /* CYCLONE_EMAC_H */

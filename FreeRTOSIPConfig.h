@@ -81,9 +81,7 @@
 /* ipconfigMULTI_INTERFACE indicates that this project is linked with +TCP/multi.
 It is only needed temporarily, finally all code will be MULTI_INTERFACE. */
 
-#ifndef	ipconfigMULTI_INTERFACE
-	#define ipconfigMULTI_INTERFACE			1
-#endif
+#define ipconfigMULTI_INTERFACE			0
 
 /* Define the byte order of the target MCU (the MCU FreeRTOS+TCP is executing
 on).  Valid options are pdFREERTOS_BIG_ENDIAN and pdFREERTOS_LITTLE_ENDIAN. */
