@@ -166,7 +166,10 @@ BaseType_t xLinkStatus;
 	/* Guard against the init function being called more than once. */
 	if( xEMACTaskHandle == NULL )
 	{
-		dwmac1000_sys_init();
+		dwmac1000_sys_init( iMacID );
+
+		gmac_tx_descriptor_init( iMacID, txDescriptors, ( uint8_t *) NULL, GMAC_TX_BUFFERS );
+		gmac_rx_descriptor_init( iMacID, rxDescriptors, ( uint8_t *) NULL, GMAC_RX_BUFFERS );
 
 		prvGMACWaitLS( xWaitLinkDelay );
 

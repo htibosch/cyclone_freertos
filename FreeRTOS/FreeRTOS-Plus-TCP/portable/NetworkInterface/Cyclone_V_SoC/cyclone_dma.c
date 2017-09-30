@@ -14,11 +14,20 @@
 #include "queue.h"
 #include "semphr.h"
 
+/* FreeRTOS+TCP includes. */
+#include "FreeRTOS_IP.h"
+#include "FreeRTOS_Sockets.h"
+#include "NetworkInterface.h"
+#include "NetworkBufferManagement.h"
 
 #include "UDPLoggingPrintf.h"
 
 #include "cyclone_dma.h"
 #include "cyclone_emac.h"
+
+#define ETH_MAX_PACKET_SIZE		( ( uint32_t ) 1524U )    /*!< ETH_HEADER + ETH_EXTRA + ETH_VLAN_TAG + ETH_MAX_ETH_PAYLOAD + ETH_CRC */
+#define ETH_TX_BUF_SIZE			ETH_MAX_PACKET_SIZE
+#define ETH_RX_BUF_SIZE         ETH_MAX_PACKET_SIZE 
 
 void dwmac1000_dma_axi( int iMacID, struct stmmac_axi *axi)
 {
@@ -80,9 +89,7 @@ int i;
 	writel(value, ioaddr + DMA_AXI_BUS_MODE);
 }
 
-void dwmac1000_dma_init( int iMacID,
-			       struct stmmac_dma_cfg *dma_cfg,
-			       uint32_t dma_tx, uint32_t dma_rx, int atds )
+void dwmac1000_dma_init( int iMacID, struct stmmac_dma_cfg *dma_cfg, int atds )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
@@ -134,12 +141,6 @@ int rxpbl;
 
 	/* Mask interrupts by writing to CSR7 */
 	writel( DMA_INTR_DEFAULT_MASK, ioaddr + DMA_INTR_ENA );
-
-	/* RX/TX descriptor base address lists must be written into
-	 * DMA CSR3 and CSR4, respectively
-	 */
-	writel( dma_tx, ioaddr + DMA_TX_BASE_ADDR );
-	writel( dma_rx, ioaddr + DMA_RCV_BASE_ADDR );
 }
 
 #if 0
@@ -289,6 +290,127 @@ const struct stmmac_dma_ops dwmac1000_dma_ops = {
 };
 
 #endif
+
+BaseType_t gmac_tx_descriptor_init( int iMacID, gmac_tx_descriptor_t *pxDMATable, uint8_t *ucDataBuffer, uint32_t ulBufferCount )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+uint32_t i = 0;
+gmac_tx_descriptor_t *pxDMADescriptor;
+
+	memset( pxDMATable, '\0', ulBufferCount * sizeof( *pxDMATable ) );
+
+	/* Set the TxDesc pointer with the first one of the pxDMATable list */
+
+	writel( ( uint32_t ) pxDMATable, ioaddr + DMA_TX_BASE_ADDR );
+
+	/* Fill each DMA descriptor with the right values */
+	for( i=0; i < ulBufferCount; i++ )
+	{
+		/* Get the pointer on the ith member of the descriptor list */
+		pxDMADescriptor = pxDMATable + i;
+
+		/* Set Second Address Chained bit */
+		pxDMADescriptor->second_addr_chained = 1;
+
+		/* Set Buffer1 address pointer */
+		if( ucDataBuffer != NULL )
+		{
+			pxDMADescriptor->buf1_address = ( uint32_t )( &ucDataBuffer[ i * ETH_TX_BUF_SIZE ] );
+		}
+		else
+		{
+			/* Buffer space is not provided because it uses zero-copy transmissions. */
+			pxDMADescriptor->buf1_address = ( uint32_t )0u;
+		}
+
+		#if( ipconfigHAS_TX_CRC_OFFLOADING != 0 )
+		{
+			/* Set the DMA Tx descriptors checksum insertion for TCP, UDP, and ICMP */
+			pxDMADescriptor->checksum_mode = 0x03;
+		}
+		#endif
+
+		/* Initialize the next descriptor with the Next Descriptor Polling Enable */
+		if(i < ( ulBufferCount - 1 ) )
+		{
+			/* Set next descriptor address register with next descriptor base address */
+			pxDMADescriptor->next_descriptor = ( uint32_t ) ( pxDMATable + i + 1 );
+		}
+		else
+		{
+			/* For last descriptor, set next descriptor address register equal to the first descriptor base address */
+			pxDMADescriptor->next_descriptor = ( uint32_t ) pxDMATable;
+		}
+	}
+	return ( BaseType_t ) 1;
+}
+
+BaseType_t gmac_rx_descriptor_init( int iMacID, gmac_rx_descriptor_t *pxDMATable, uint8_t *ucDataBuffer, uint32_t ulBufferCount )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+uint32_t i = 0;
+BaseType_t xReturn = 1;
+gmac_rx_descriptor_t *pxDMADescriptor;
+
+	memset( pxDMATable, '\0', ulBufferCount * sizeof( *pxDMATable ) );
+
+	/* Set the RxDesc pointer with the first one of the pxDMATable list */
+	writel( ( uint32_t ) pxDMATable, ioaddr + DMA_RCV_BASE_ADDR );
+
+	/* Fill each DMA descriptor with the right values */
+	for( i = 0; i < ulBufferCount; i++ )
+	{
+		/* Get the pointer on the ith member of the descriptor list */
+		pxDMADescriptor = pxDMATable + i;
+
+		/* Set Own bit of the Rx descriptor Status */
+		pxDMADescriptor->own = 1;
+
+		/* Set Buffer1 size and Second Address Chained bit */
+		pxDMADescriptor->second_address_chained = 1;
+		pxDMADescriptor->buf1_byte_count = ETH_RX_BUF_SIZE;
+
+		/* Set Buffer1 address pointer */
+		if( ucDataBuffer != NULL )
+		{
+			pxDMADescriptor->buf1_address = ( uint32_t )( &ucDataBuffer[ i * ETH_RX_BUF_SIZE ] );
+		}
+		else
+		{
+		NetworkBufferDescriptor_t *pxBuffer;
+
+			pxBuffer = pxGetNetworkBufferWithDescriptor( ETH_RX_BUF_SIZE, ( TickType_t ) 0u );
+			if( pxBuffer != NULL )
+			{
+				/* Buffer space is not provided because it uses zero-copy reception. */
+				pxDMADescriptor->buf1_address = ( uint32_t )pxBuffer->pucEthernetBuffer;
+			}
+			else
+			{
+				configASSERT( pxBuffer != NULL );
+				xReturn = 0;
+				break;
+			}
+		}
+
+		/* Enable Ethernet DMA Rx Descriptor interrupt */
+		pxDMADescriptor->disable_int_on_compl = 0;
+
+		/* Initialize the next descriptor with the Next Descriptor Polling Enable */
+		if(i < (ulBufferCount-1))
+		{
+			/* Set next descriptor address register with next descriptor base address */
+			pxDMADescriptor->next_descriptor = (uint32_t)(pxDMATable+i+1);
+		}
+		else
+		{
+			/* For last descriptor, set next descriptor address register equal to the first descriptor base address */
+			pxDMADescriptor->next_descriptor = ( uint32_t ) pxDMATable;
+		}
+	}
+
+	return xReturn;
+}
 
 void gmac_check_rx( EMACInterface_t *pxEMACif )
 {

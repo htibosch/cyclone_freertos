@@ -167,10 +167,13 @@ struct gmac_rx_descriptor
 		dest_addr_filter_fail : 1,	/* 30 Destination Address Filter Fail */
 		own : 1;					/* 31 */
 	uint32_t
-		buf1_byte_count : 13,
-		res1 : 3,
-		buf2_byte_count : 13,
-		res2 : 3;
+		buf1_byte_count : 13,		/*  0  RBS1: Receive Buffer 1 Size */
+		res1 : 1,					/* 13 */
+		second_address_chained : 1,	/* 14  RCH: Second Address Chained */
+		receive_end_of_ring : 1,	/* 15  RER: Receive End of Ring */
+		buf2_byte_count : 13,		/* 16 */
+		res2 : 2,					/* 29 */
+		disable_int_on_compl : 1;	/* 31  DIC: Disable Interrupt on Completion */
 	uint32_t
 		buf1_address;
 	uint32_t
@@ -184,6 +187,9 @@ struct xEMACInterface {
 };
 
 typedef struct xEMACInterface EMACInterface_t;
+
+BaseType_t gmac_tx_descriptor_init( int iMacID, gmac_tx_descriptor_t *pxDMATable, uint8_t *ucDataBuffer, uint32_t ulBufferCount );
+BaseType_t gmac_rx_descriptor_init( int iMacID, gmac_rx_descriptor_t *pxDMATable, uint8_t *ucDataBuffer, uint32_t ulBufferCount );
 
 void gmac_check_rx( EMACInterface_t *pxEMACif );
 void gmac_check_tx( EMACInterface_t *pxEMACif );
@@ -226,8 +232,6 @@ struct stmmac_dma_cfg
 };
 
 extern void dwmac1000_dma_axi( int iMacID, struct stmmac_axi *axi );
-extern void dwmac1000_dma_init( int iMacID,
-			       struct stmmac_dma_cfg *dma_cfg,
-			       uint32_t dma_tx, uint32_t dma_rx, int atds );
+extern void dwmac1000_dma_init( int iMacID, struct stmmac_dma_cfg *dma_cfg, int atds );
 
 #endif /* CYCLONE_DMA_H */

@@ -207,7 +207,7 @@ struct xEMACDeviceInfo
 
 typedef struct xEMACDeviceInfo EMACDeviceInfo_t;
 
-void dwmac1000_sys_init(void);
+void dwmac1000_sys_init( int iMacID );
 void dwmac1000_rgsmii(int iMacID, EMACStats_t *pxStats);
 void dwmac1000_core_init(int iMacID, EMACDeviceInfo_t *hw, int mtu);
 

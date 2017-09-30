@@ -531,11 +531,10 @@ ALT_SYSMGR_t *systemManager = ( ALT_SYSMGR_t * )ALT_SYSMGR_OFST;
 
 volatile uint8_t desc_copy[ sizeof( gmac_tx_descriptor_t ) ];
 
-void dwmac1000_sys_init()
+void dwmac1000_sys_init( int iMacID )
 {
 EMACStats_t xStats;
 EMACDeviceInfo_t hw;
-const int iMacID = 1;
 int phyaddr, iIndex;
 
 //	ulVersion = systemManager->pinmuxgrp.EMACIO0.sel;               /* ALT_SYSMGR_PINMUX_EMACIO0 */
