@@ -17,8 +17,8 @@
 
 #include "UDPLoggingPrintf.h"
 
-#include "cyclone_emac.h"
 #include "cyclone_dma.h"
+#include "cyclone_emac.h"
 
 void dwmac1000_dma_axi( int iMacID, struct stmmac_axi *axi)
 {
@@ -289,3 +289,15 @@ const struct stmmac_dma_ops dwmac1000_dma_ops = {
 };
 
 #endif
+
+void gmac_check_rx( EMACInterface_t *pxEMACif )
+{
+}
+
+void gmac_check_tx( EMACInterface_t *pxEMACif )
+{
+}
+
+void gmac_check_errors( EMACInterface_t *pxEMACif )
+{
+}

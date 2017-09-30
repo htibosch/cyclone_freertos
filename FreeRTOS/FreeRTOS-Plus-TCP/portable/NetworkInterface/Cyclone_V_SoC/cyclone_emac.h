@@ -240,4 +240,12 @@ static __inline void writel( uint32_t ulValue, uint8_t *pucAddress )
 	*( ( volatile uint32_t *) pucAddress ) = ulValue;
 }
 
+extern uint32_t ulUsePHYAddress;
+
+int gmac_mdio_read( int iMacID, int phyaddr, int phyreg);
+
+int gmac_mdio_write( int iMacID, int phyaddr, int phyreg, uint16_t phydata );
+
+uint32_t Phy_Setup( EMACInterface_t *pxEMACif );
+
 #endif /* CYCLONE_EMAC_H */

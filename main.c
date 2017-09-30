@@ -1,92 +1,78 @@
 /*
-    FreeRTOS V9.0.0 - Copyright (C) 2016 Real Time Engineers Ltd.
-    All rights reserved
+	FreeRTOS V9.0.0 - Copyright (C) 2016 Real Time Engineers Ltd.
+	All rights reserved
 
-    VISIT http://www.FreeRTOS.org TO ENSURE YOU ARE USING THE LATEST VERSION.
+	VISIT http://www.FreeRTOS.org TO ENSURE YOU ARE USING THE LATEST VERSION.
 
-    This file is part of the FreeRTOS distribution.
+	This file is part of the FreeRTOS distribution.
 
-    FreeRTOS is free software; you can redistribute it and/or modify it under
-    the terms of the GNU General Public License (version 2) as published by the
-    Free Software Foundation >>>> AND MODIFIED BY <<<< the FreeRTOS exception.
+	FreeRTOS is free software; you can redistribute it and/or modify it under
+	the terms of the GNU General Public License (version 2) as published by the
+	Free Software Foundation >>>> AND MODIFIED BY <<<< the FreeRTOS exception.
 
-    ***************************************************************************
-    >>!   NOTE: The modification to the GPL is included to allow you to     !<<
-    >>!   distribute a combined work that includes FreeRTOS without being   !<<
-    >>!   obliged to provide the source code for proprietary components     !<<
-    >>!   outside of the FreeRTOS kernel.                                   !<<
-    ***************************************************************************
+	***************************************************************************
+	>>!   NOTE: The modification to the GPL is included to allow you to     !<<
+	>>!   distribute a combined work that includes FreeRTOS without being   !<<
+	>>!   obliged to provide the source code for proprietary components     !<<
+	>>!   outside of the FreeRTOS kernel.                                   !<<
+	***************************************************************************
 
-    FreeRTOS is distributed in the hope that it will be useful, but WITHOUT ANY
-    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-    FOR A PARTICULAR PURPOSE.  Full license text is available on the following
-    link: http://www.freertos.org/a00114.html
+	FreeRTOS is distributed in the hope that it will be useful, but WITHOUT ANY
+	WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+	FOR A PARTICULAR PURPOSE.  Full license text is available on the following
+	link: http://www.freertos.org/a00114.html
 
-    ***************************************************************************
-     *                                                                       *
-     *    FreeRTOS provides completely free yet professionally developed,    *
-     *    robust, strictly quality controlled, supported, and cross          *
-     *    platform software that is more than just the market leader, it     *
-     *    is the industry's de facto standard.                               *
-     *                                                                       *
-     *    Help yourself get started quickly while simultaneously helping     *
-     *    to support the FreeRTOS project by purchasing a FreeRTOS           *
-     *    tutorial book, reference manual, or both:                          *
-     *    http://www.FreeRTOS.org/Documentation                              *
-     *                                                                       *
-    ***************************************************************************
+	***************************************************************************
+	 *                                                                       *
+	 *    FreeRTOS provides completely free yet professionally developed,    *
+	 *    robust, strictly quality controlled, supported, and cross          *
+	 *    platform software that is more than just the market leader, it     *
+	 *    is the industry's de facto standard.                               *
+	 *                                                                       *
+	 *    Help yourself get started quickly while simultaneously helping     *
+	 *    to support the FreeRTOS project by purchasing a FreeRTOS           *
+	 *    tutorial book, reference manual, or both:                          *
+	 *    http://www.FreeRTOS.org/Documentation                              *
+	 *                                                                       *
+	***************************************************************************
 
-    http://www.FreeRTOS.org/FAQHelp.html - Having a problem?  Start by reading
-    the FAQ page "My application does not run, what could be wrong?".  Have you
-    defined configASSERT()?
+	http://www.FreeRTOS.org/FAQHelp.html - Having a problem?  Start by reading
+	the FAQ page "My application does not run, what could be wrong?".  Have you
+	defined configASSERT()?
 
-    http://www.FreeRTOS.org/support - In return for receiving this top quality
-    embedded software for free we request you assist our global community by
-    participating in the support forum.
+	http://www.FreeRTOS.org/support - In return for receiving this top quality
+	embedded software for free we request you assist our global community by
+	participating in the support forum.
 
-    http://www.FreeRTOS.org/training - Investing in training allows your team to
-    be as productive as possible as early as possible.  Now you can receive
-    FreeRTOS training directly from Richard Barry, CEO of Real Time Engineers
-    Ltd, and the world's leading authority on the world's leading RTOS.
+	http://www.FreeRTOS.org/training - Investing in training allows your team to
+	be as productive as possible as early as possible.  Now you can receive
+	FreeRTOS training directly from Richard Barry, CEO of Real Time Engineers
+	Ltd, and the world's leading authority on the world's leading RTOS.
 
-    http://www.FreeRTOS.org/plus - A selection of FreeRTOS ecosystem products,
-    including FreeRTOS+Trace - an indispensable productivity tool, a DOS
-    compatible FAT file system, and our tiny thread aware UDP/IP stack.
+	http://www.FreeRTOS.org/plus - A selection of FreeRTOS ecosystem products,
+	including FreeRTOS+Trace - an indispensable productivity tool, a DOS
+	compatible FAT file system, and our tiny thread aware UDP/IP stack.
 
-    http://www.FreeRTOS.org/labs - Where new FreeRTOS products go to incubate.
-    Come and try FreeRTOS+TCP, our new open source TCP/IP stack for FreeRTOS.
+	http://www.FreeRTOS.org/labs - Where new FreeRTOS products go to incubate.
+	Come and try FreeRTOS+TCP, our new open source TCP/IP stack for FreeRTOS.
 
-    http://www.OpenRTOS.com - Real Time Engineers ltd. license FreeRTOS to High
-    Integrity Systems ltd. to sell under the OpenRTOS brand.  Low cost OpenRTOS
-    licenses offer ticketed support, indemnification and commercial middleware.
+	http://www.OpenRTOS.com - Real Time Engineers ltd. license FreeRTOS to High
+	Integrity Systems ltd. to sell under the OpenRTOS brand.  Low cost OpenRTOS
+	licenses offer ticketed support, indemnification and commercial middleware.
 
-    http://www.SafeRTOS.com - High Integrity Systems also provide a safety
-    engineered and independently SIL3 certified version for use in safety and
-    mission critical applications that require provable dependability.
+	http://www.SafeRTOS.com - High Integrity Systems also provide a safety
+	engineered and independently SIL3 certified version for use in safety and
+	mission critical applications that require provable dependability.
 
-    1 tab == 4 spaces!
+	1 tab == 4 spaces!
 */
 
-/******************************************************************************
- * This project provides two demo applications.  A simple blinky style project,
- * and a more comprehensive test and demo application.  The
- * mainCREATE_SIMPLE_BLINKY_DEMO_ONLY setting (defined in this file) is used to
- * select between the two.  The simply blinky demo is implemented and described
- * in main_blinky.c.  The more comprehensive test and demo application is
- * implemented and described in main_full.c.
- *
- * This file implements the code that is not demo specific, including the
- * hardware setup and FreeRTOS hook functions.
- *
- * ENSURE TO READ THE DOCUMENTATION PAGE FOR THIS PORT AND DEMO APPLICATION ON
- * THE http://www.FreeRTOS.org WEB SITE FOR FULL INFORMATION ON USING THIS DEMO
- * APPLICATION, AND ITS ASSOCIATE FreeRTOS ARCHITECTURE PORT!
- *
- */
 
 /* Standard includes. */
 #include <stdio.h>
 #include <limits.h>
+#include <stdlib.h>
+#include <strings.h>
 
 /* Scheduler include files. */
 #include "FreeRTOS.h"
@@ -111,7 +97,20 @@
 
 #include "serial.h"
 
+#include "cyclone_dma.h"
 #include "cyclone_emac.h"
+
+/* FreeRTOS+TCP includes. */
+#include "FreeRTOS_IP.h"
+#include "FreeRTOS_Sockets.h"
+#include "FreeRTOS_DHCP.h"
+#include "FreeRTOS_tcp_server.h"
+#include "NetworkInterface.h"
+
+/* Demo application includes. */
+#include "hr_gettime.h"
+
+#include "UDPLoggingPrintf.h"
 
 /* mainCREATE_SIMPLE_BLINKY_DEMO_ONLY is used to select between two demo
  * applications, as described at the top of this file.
@@ -123,6 +122,13 @@
  * and demo application will be run.
  */
 #define mainCREATE_SIMPLE_BLINKY_DEMO_ONLY	1
+
+#define mainCOMMAND_TASK_PRIORITY		( tskIDLE_PRIORITY + 1 )
+#define mainCOMMAND_TASK_STACK_SIZE		( 1024 )
+
+/* Define names that will be used for DNS, LLMNR and NBNS searches. */
+#define mainHOST_NAME					"sam4e"
+#define mainDEVICE_NICK_NAME			"sam4expro"
 
 /*-----------------------------------------------------------*/
 
@@ -149,6 +155,8 @@ void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName );
 void vApplicationTickHook( void );
 
 /*-----------------------------------------------------------*/
+
+static void prvCommandTask( void *pvParameters );
 
 /* configAPPLICATION_ALLOCATED_HEAP is set to 1 in FreeRTOSConfig.h so the
 application can define the array used as the FreeRTOS heap.  This is done so the
@@ -184,10 +192,16 @@ const uint8_t ucMACAddress[ 6 ] = { configMAC_ADDR0, configMAC_ADDR1, configMAC_
 /* Use by the pseudo random number generator. */
 static UBaseType_t ulNextRand;
 
+static SemaphoreHandle_t xServerSemaphore;
+
+int verboseLevel;
+
+/* Handle of the task that runs the FTP and HTTP servers. */
+static TaskHandle_t xCommandTaskHandle = NULL;
+
 #define RECEIVE_TASK_STACK_SIZE		640
 #define RECEIVE_TASK_PRIORITY		2
 
-static void prvQueueReceiveTask( void *pvParameter );
 /*-----------------------------------------------------------*/
 
 int main( void )
@@ -197,16 +211,17 @@ int main( void )
 
 	xSerialPortInitMinimal( 115200, 128 );
 
-	/* The mainSELECTED_APPLICATION setting is described at the top
-	of this file. */
+	/* Initialise the network interface.
 
-	xTaskCreate( prvQueueReceiveTask,				/* The function that implements the task. */
-				"Rx", 								/* The text name assigned to the task - for debug only as it is not used by the kernel. */
-				RECEIVE_TASK_STACK_SIZE, 			/* The size of the stack to allocate to the task. */
-				NULL, 								/* The parameter passed to the task - not used in this case. */
-				RECEIVE_TASK_PRIORITY,			 	/* The priority assigned to the task. */
-				NULL );								/* The task handle is not required, so NULL is passed. */
+	***NOTE*** Tasks that use the network are created in the network event hook
+	when the network is connected and ready for use (see the definition of
+	vApplicationIPNetworkEventHook() below).  The address values passed in here
+	are used if ipconfigUSE_DHCP is set to 0, or if ipconfigUSE_DHCP is set to 1
+	but a DHCP server cannot be	contacted. */
 
+	FreeRTOS_IPInit( ucIPAddress, ucNetMask, ucGatewayAddress, ucDNSServerAddress, ucMACAddress );
+
+	xTaskCreate( prvCommandTask, "Command", mainCOMMAND_TASK_STACK_SIZE, NULL, mainCOMMAND_TASK_PRIORITY, &xCommandTaskHandle );
 
 	/* Start the tasks and timer running. */
 	vTaskStartScheduler();
@@ -226,14 +241,113 @@ int main( void )
 }
 /*-----------------------------------------------------------*/
 
-static void prvQueueReceiveTask( void *pvParameter )
-{
-	dwmac1000_sys_init();
-	for( ;; )
+	static void prvCommandTask( void *pvParameters )
 	{
-		vTaskDelay( 1000 );
+		xSocket_t xSocket;
+		BaseType_t xHadSocket = pdFALSE;
+		BaseType_t xLastCount = 0;
+		char cLastBuffer[ 16 ];
+		char cBuffer[ 128 ];
+
+		xServerSemaphore = xSemaphoreCreateBinary();
+		configASSERT( xServerSemaphore != NULL );
+
+		/* Wait until the network is up before creating the servers.  The
+		notification is given from the network event hook. */
+		ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+
+		/* The priority of this task can be raised now the disk has been
+		initialised. */
+		vTaskPrioritySet( NULL, mainCOMMAND_TASK_PRIORITY );
+
+//		xTelnetCreate( &xTelnet, 23 );
+
+		for( ;; )
+		{
+		TickType_t xReceiveTimeOut = pdMS_TO_TICKS( 200 );
+
+			xSemaphoreTake( xServerSemaphore, xReceiveTimeOut );
+
+			xSocket = xLoggingGetSocket();
+
+			if( xSocket == NULL)
+			{
+				vTaskDelay( 100 );
+			}
+			else
+			{
+			BaseType_t xCount;
+			struct freertos_sockaddr xSourceAddress;
+			socklen_t xSourceAddressLength = sizeof( xSourceAddress );
+
+				if( xHadSocket == pdFALSE )
+				{
+					xHadSocket = pdTRUE;
+					FreeRTOS_printf( ( "prvCommandTask started\n" ) );
+					/* xServerSemaphore will be given to when there is data for xSocket
+					and also as soon as there is USB/CDC data. */
+					FreeRTOS_setsockopt( xSocket, 0, FREERTOS_SO_SET_SEMAPHORE, ( void * ) &xServerSemaphore, sizeof( xServerSemaphore ) );
+					//FreeRTOS_setsockopt( xSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof( xReceiveTimeOut ) );
+				}
+				xCount = 0;// xTelnetRecv( &xTelnet, &xSourceAddress, cBuffer, sizeof( cBuffer ) - 1 );
+				if( xCount == 0 )
+				{
+					xCount = FreeRTOS_recvfrom( xSocket, ( void * )cBuffer, sizeof( cBuffer )-1, FREERTOS_MSG_DONTWAIT,
+						&xSourceAddress, &xSourceAddressLength );
+				}
+
+				if( ( xCount >= 3 ) && ( xCount <= 5 ) && ( cBuffer[ 0 ] == 0x1b ) && ( cBuffer[ 1 ] == 0x5b ) && ( cBuffer[ 2 ] == 0x41 ) )
+				{
+					xCount = xLastCount;
+					memcpy( cBuffer, cLastBuffer, sizeof cLastBuffer );
+				}
+				else if( xCount > 0 )
+				{
+					xLastCount = xCount;
+					memcpy( cLastBuffer, cBuffer, sizeof cLastBuffer );
+				}
+
+				if( ( xCount > 0 ) && ( cBuffer[ 0 ] >= 32 ) && ( cBuffer[ 0 ] < 0x7F ) )
+				{
+					cBuffer[ xCount ] = '\0';
+					FreeRTOS_printf( ( ">> %s\n", cBuffer ) );
+					if( strncmp( cBuffer, "ver", 3 ) == 0 )
+					{
+					int level;
+
+						if( sscanf( cBuffer + 3, "%d", &level ) == 1 )
+						{
+							verboseLevel = level;
+						}
+						lUDPLoggingPrintf( "Verbose level %d\n", verboseLevel );
+					}
+
+					#if( USE_IPERF != 0 )
+		
+					{
+						if( strncmp( cBuffer, "iperf", 5 ) == 0 )
+						{
+							vIPerfInstall();
+						}
+					}
+					#endif
+
+					if( strncmp( cBuffer, "netstat", 7 ) == 0 )
+					{
+						FreeRTOS_netstat();
+					}
+					#if( USE_LOG_EVENT != 0 )
+					{
+						if( strncmp( cBuffer, "event", 4 ) == 0 )
+						{
+							eventLogDump();
+						}
+					}
+					#endif /* USE_LOG_EVENT */
+				}	/* if( xCount > 0 ) */
+			}	/* if( xSocket != NULL) */
+		}
 	}
-}
 
 static void prvSetupHardware( void )
 {
@@ -261,6 +375,76 @@ const uint32_t ulVBit = 13U;
 
 /*-----------------------------------------------------------*/
 
+/* Called by FreeRTOS+TCP when the network connects or disconnects.  Disconnect
+events are only received if implemented in the MAC driver. */
+
+/* Called by FreeRTOS+TCP when the network connects or disconnects.  Disconnect
+events are only received if implemented in the MAC driver. */
+void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
+{
+static BaseType_t xTasksAlreadyCreated = pdFALSE;
+
+	/* If the network has just come up...*/
+	if( eNetworkEvent == eNetworkUp )
+	{
+		/* Create the tasks that use the IP stack if they have not already been
+		created. */
+		if( xTasksAlreadyCreated == pdFALSE )
+		{
+			/* Tasks that use the TCP/IP stack can be created here. */
+
+			#if( mainCREATE_TCP_ECHO_TASKS_SINGLE == 1 )
+			{
+				/* See http://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/TCP_Echo_Clients.html */
+				vStartTCPEchoClientTasks_SingleTasks( configMINIMAL_STACK_SIZE * 4, tskIDLE_PRIORITY + 1 );
+			}
+			#endif
+
+			#if( mainCREATE_SIMPLE_TCP_ECHO_SERVER == 1 )
+			{
+				/* See http://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/TCP_Echo_Server.html */
+				vStartSimpleTCPServerTasks( configMINIMAL_STACK_SIZE * 4, tskIDLE_PRIORITY + 1 );
+			}
+			#endif
+
+
+			#if( ( mainCREATE_FTP_SERVER == 1 ) || ( mainCREATE_HTTP_SERVER == 1 ) )
+			{
+				/* See TBD.
+				Let the server work task now it can now create the servers. */
+				xTaskNotifyGive( xServerWorkTaskHandle );
+			}
+			#endif
+			xTaskNotifyGive( xCommandTaskHandle );
+
+			/* Start a new task to fetch logging lines and send them out. */
+			vUDPLoggingTaskCreate();
+
+			xTasksAlreadyCreated = pdTRUE;
+		}
+
+		{
+		uint32_t ulIPAddress, ulNetMask, ulGatewayAddress, ulDNSServerAddress;
+		char cBuffer[ 16 ];
+			/* Print out the network configuration, which may have come from a DHCP
+			server. */
+			FreeRTOS_GetAddressConfiguration( &ulIPAddress, &ulNetMask, &ulGatewayAddress, &ulDNSServerAddress );
+			FreeRTOS_inet_ntoa( ulIPAddress, cBuffer );
+			FreeRTOS_printf( ( "IP Address: %s\n", cBuffer ) );
+
+			FreeRTOS_inet_ntoa( ulNetMask, cBuffer );
+			FreeRTOS_printf( ( "Subnet Mask: %s\n", cBuffer ) );
+
+			FreeRTOS_inet_ntoa( ulGatewayAddress, cBuffer );
+			FreeRTOS_printf( ( "Gateway Address: %s\n", cBuffer ) );
+
+			FreeRTOS_inet_ntoa( ulDNSServerAddress, cBuffer );
+			FreeRTOS_printf( ( "DNS Server Address: %s\n", cBuffer ) );
+		}
+	}
+}
+/*-----------------------------------------------------------*/
+
 void vApplicationMallocFailedHook( void )
 {
 	/* Called if a call to pvPortMalloc() fails because there is insufficient
@@ -268,8 +452,7 @@ void vApplicationMallocFailedHook( void )
 	internally by FreeRTOS API functions that create tasks, queues, software
 	timers, and semaphores.  The size of the FreeRTOS heap is set by the
 	configTOTAL_HEAP_SIZE configuration constant in FreeRTOSConfig.h. */
-	taskDISABLE_INTERRUPTS();
-	for( ;; );
+	vAssertCalled( __FILE__, __LINE__ );
 }
 /*-----------------------------------------------------------*/
 
@@ -283,6 +466,62 @@ void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName )
 	function is called if a stack overflow is detected. */
 	taskDISABLE_INTERRUPTS();
 	for( ;; );
+}
+/*-----------------------------------------------------------*/
+
+UBaseType_t uxRand( void )
+{
+const uint32_t ulMultiplier = 0x015a4e35UL, ulIncrement = 1UL;
+
+	/* Utility function to generate a pseudo random number. */
+
+	ulNextRand = ( ulMultiplier * ulNextRand ) + ulIncrement;
+	return( ( int ) ( ulNextRand >> 16UL ) & 0x7fffUL );
+}
+/*-----------------------------------------------------------*/
+
+static void prvSRand( UBaseType_t ulSeed )
+{
+	/* Utility function to seed the pseudo random number generator. */
+	ulNextRand = ulSeed;
+}
+/*-----------------------------------------------------------*/
+
+void vApplicationPingReplyHook( ePingReplyStatus_t eStatus, uint16_t usIdentifier )
+{
+}
+/*-----------------------------------------------------------*/
+
+const char *pcApplicationHostnameHook( void )
+{
+	/* Assign the name "FreeRTOS" to this network node.  This function will be
+	called during the DHCP: the machine will be registered with an IP address
+	plus this name. */
+	return mainHOST_NAME;
+}
+/*-----------------------------------------------------------*/
+
+BaseType_t xApplicationDNSQueryHook( const char *pcName )
+{
+BaseType_t xReturn;
+
+	/* Determine if a name lookup is for this node.  Two names are given
+	to this node: that returned by pcApplicationHostnameHook() and that set
+	by mainDEVICE_NICK_NAME. */
+	if( strcasecmp( pcName, pcApplicationHostnameHook() ) == 0 )
+	{
+		xReturn = pdPASS;
+	}
+	else if( strcasecmp( pcName, mainDEVICE_NICK_NAME ) == 0 )
+	{
+		xReturn = pdPASS;
+	}
+	else
+	{
+		xReturn = pdFAIL;
+	}
+
+	return xReturn;
 }
 /*-----------------------------------------------------------*/
 
@@ -380,9 +619,9 @@ void FreeRTOS_Tick_Handler( void );
 	alt_int_dist_priority_set( ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE, portLOWEST_USABLE_INTERRUPT_PRIORITY << portPRIORITY_SHIFT );
 
 	/* Ensure the interrupt is forwarded to the CPU. */
-    alt_int_dist_enable( ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE );
+	alt_int_dist_enable( ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE );
 
-    /* Finally, enable the interrupt. */
+	/* Finally, enable the interrupt. */
 	alt_gpt_int_clear_pending( ALT_GPT_CPU_PRIVATE_TMR );
 	alt_gpt_int_enable( ALT_GPT_CPU_PRIVATE_TMR );
 
@@ -406,7 +645,7 @@ void *pvContext;
 alt_int_callback_t pxISR;
 
 	/* Re-enable interrupts. */
-    __asm ( "cpsie i" );
+	__asm ( "cpsie i" );
 
 	/* The ID of the interrupt is obtained by bitwise anding the ICCIAR value
 	with 0x3FF. */
@@ -431,16 +670,16 @@ void vOutputChar( const char cChar, const TickType_t xTicksToWait  )
 #define KILO_BYTE						( 1024u )
 #define MEGA_BYTE						( KILO_BYTE * KILO_BYTE )
 
-#define BOOT_ROM_ORIGIN					( 0xfffd0000 )
-#define BOOT_ROM_LENGTH					( 64*1024 )
+#define BOOT_ROM_ORIGIN					( 0xfffd0000u )
+#define BOOT_ROM_LENGTH					( 64u * KILO_BYTE )
 
-#define ON_CHIP_RAM_ORIGIN				( 0xffff0000 )
-#define ON_CHIP_RAM_LENGTH				( 64*1024 )
+#define ON_CHIP_RAM_ORIGIN				( 0xffff0000u )
+#define ON_CHIP_RAM_LENGTH				( 64u * KILO_BYTE )
 
-#define SD_RAM_ORIGIN					( 0x00100000 )
-#define SD_RAM_LENGTH					( 1023 * MEGA_BYTE )
+#define SD_RAM_ORIGIN					( 0x00100000u )
+#define SD_RAM_LENGTH					( 1023u * MEGA_BYTE )
 
-#define IN_RANGE( ADDR, START, LEN )	( ( ADDR >= START ) && ( ADDR < START + LEN ) )
+#define IN_RANGE( ADDR, START, LEN )	( ( ADDR >= START ) && ( ADDR <= START + ( LEN - 1 ) ) )
 
 //  boot_rom (rx) : ORIGIN = 0xfffd0000, LENGTH = 64K
 //  oc_ram (rwx) : ORIGIN = 0xffff0000, LENGTH = 64K
@@ -449,17 +688,61 @@ void vOutputChar( const char cChar, const TickType_t xTicksToWait  )
 extern BaseType_t xApplicationMemoryPermissions( uint32_t aAddress );
 BaseType_t xApplicationMemoryPermissions( uint32_t aAddress )
 {
+BaseType_t xReturn;
+
 	if( IN_RANGE( aAddress, BOOT_ROM_ORIGIN, BOOT_ROM_LENGTH ) )
 	{
-		return 1;
+		xReturn = 1;
 	}
-	if( IN_RANGE( aAddress, SD_RAM_ORIGIN, ON_CHIP_RAM_LENGTH ) )
+	else if( IN_RANGE( aAddress, SD_RAM_ORIGIN, SD_RAM_LENGTH ) )
 	{
-		return 3;
+		xReturn = 3;
 	}
-	if( IN_RANGE( aAddress, ON_CHIP_RAM_ORIGIN, ON_CHIP_RAM_LENGTH ) )
+	else if( IN_RANGE( aAddress, ON_CHIP_RAM_ORIGIN, ON_CHIP_RAM_LENGTH ) )
 	{
-		return 3;
+		xReturn = 3;
 	}
+	else
+	{
+		xReturn = 0;
+	}
+
+	return xReturn;
+}
+
+int _read(int handle, void *buf, unsigned len)
+{
+	return 0;
+}
+
+int _write(int handle, void *buf, unsigned len)
+{
+	return len;
+}
+
+int _close(int file)
+{
+	return -1;
+}
+
+extern int _end;
+
+caddr_t _sbrk(int incr)
+{
+	static unsigned char *heap = NULL;
+	unsigned char *prev_heap;
+
+	if (heap == NULL) {
+		heap = (unsigned char *)&_end;
+	}
+	prev_heap = heap;
+
+	heap += incr;
+
+	return (caddr_t) prev_heap;
+}
+
+int _lseek(int file, int ptr, int dir)
+{
 	return 0;
 }

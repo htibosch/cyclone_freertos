@@ -99,7 +99,7 @@ enum rx_tx_priority_ratio {
 
 #define AXI_BLEN	7
 
-struct xTransmitDescriptor
+struct gmac_tx_descriptor
 {
 	uint32_t
 		deferred_bit : 1,			/*  0 */
@@ -144,7 +144,50 @@ struct xTransmitDescriptor
 		next_descriptor;
 };
 
-typedef struct xTransmitDescriptor gmac_tx_descriptor_t;
+struct gmac_rx_descriptor
+{
+	uint32_t
+		ext_status_available : 1,	/*  0 */
+		crc_error : 1,				/*  1 */
+		dribble_bit_error : 1,		/*  2 */
+		receive_error : 1,			/*  3 */
+		recv_wdt_timeout : 1,		/*  4 */
+		frame_type : 1,				/*  5 */
+		late_collision : 1,			/*  6 */
+		time_stamp_available : 1,	/*  7 */
+		last_descriptor : 1,		/*  8 */
+		first_descriptor : 1,		/*  9 */
+		vlan_tag : 1,				/* 10 */
+		overflow_error : 1,			/* 11 */
+		length_error : 1,			/* 12 */
+		source_addr_filter_fail : 1,/* 13 Source Address Filter Fail */
+		description_error : 1,		/* 14 */
+		error_summary : 1,			/* 15 */
+		frame_length : 14,			/* 16 */
+		dest_addr_filter_fail : 1,	/* 30 Destination Address Filter Fail */
+		own : 1;					/* 31 */
+	uint32_t
+		buf1_byte_count : 13,
+		res1 : 3,
+		buf2_byte_count : 13,
+		res2 : 3;
+	uint32_t
+		buf1_address;
+	uint32_t
+		next_descriptor;
+};
+
+typedef struct gmac_tx_descriptor gmac_tx_descriptor_t;
+typedef struct gmac_rx_descriptor gmac_rx_descriptor_t;
+
+struct xEMACInterface {
+};
+
+typedef struct xEMACInterface EMACInterface_t;
+
+void gmac_check_rx( EMACInterface_t *pxEMACif );
+void gmac_check_tx( EMACInterface_t *pxEMACif );
+void gmac_check_errors( EMACInterface_t *pxEMACif );
 
 struct stmmac_axi
 {

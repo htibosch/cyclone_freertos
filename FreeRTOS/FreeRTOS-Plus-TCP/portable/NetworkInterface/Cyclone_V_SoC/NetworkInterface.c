@@ -72,13 +72,14 @@
 #include "FreeRTOS_IP_Private.h"
 #include "NetworkBufferManagement.h"
 #include "NetworkInterface.h"
-#include "designware.h"
+
+#include "cyclone_dma.h"
+#include "cyclone_emac.h"
 
 /* Provided memory configured as uncached. */
 #include "uncached_memory.h"
 
-#define niBMSR_LINK_STATUS         0x0004UL
-#define niBMSR_AN_COMPLETE			0x0020u	/* Auto-Negotiation process completed */
+#define niBMSR_LINK_STATUS         0x0004ul
 
 #ifndef	PHY_LS_HIGH_CHECK_TIME_MS
 	/* Check if the LinkSStatus in the PHY is still high after 15 seconds of not
@@ -150,6 +151,11 @@ static volatile UBaseType_t uxISREvents;
 
 EMACInterface_t xEMACif;
 
+static int iMacID = 1;
+
+__attribute__ ( ( aligned( 32 ) ) ) gmac_tx_descriptor_t txDescriptors[ GMAC_TX_BUFFERS ];
+__attribute__ ( ( aligned( 32 ) ) ) gmac_rx_descriptor_t rxDescriptors[ GMAC_RX_BUFFERS ];
+
 /*-----------------------------------------------------------*/
 
 BaseType_t xNetworkInterfaceInitialise( void )
@@ -160,6 +166,8 @@ BaseType_t xLinkStatus;
 	/* Guard against the init function being called more than once. */
 	if( xEMACTaskHandle == NULL )
 	{
+		dwmac1000_sys_init();
+
 		prvGMACWaitLS( xWaitLinkDelay );
 
 		/* The deferred interrupt handler task is created at the highest
@@ -198,11 +206,17 @@ BaseType_t xNetworkInterfaceOutput( NetworkBufferDescriptor_t * const pxBuffer, 
 }
 /*-----------------------------------------------------------*/
 
-static inline unsigned long ulReadMDIO( unsigned ulRegister )
+static inline uint32_t ulReadMDIO( uint32_t ulRegister )
 {
-uint16_t usValue = (unsigned long)0xffffu;
+uint32_t ulValue = gmac_mdio_read( iMacID, ulUsePHYAddress, ulRegister);
 
-	return usValue;
+	return ulValue;
+}
+/*-----------------------------------------------------------*/
+
+static inline void ulWriteMDIO( uint32_t ulRegister, uint32_t ulValue )
+{
+	gmac_mdio_write( iMacID, ulUsePHYAddress, ulRegister, ( uint16_t ) ulValue );
 }
 /*-----------------------------------------------------------*/
 
@@ -321,19 +335,19 @@ uint32_t ulStatus;
 		if( ( uxISREvents & EMAC_IF_RX_EVENT ) != 0 )
 		{
 			uxISREvents &= ~EMAC_IF_RX_EVENT;
-			emacps_check_rx( &xEMACif );
+			gmac_check_rx( &xEMACif );
 		}
 
 		if( ( uxISREvents & EMAC_IF_TX_EVENT ) != 0 )
 		{
 			uxISREvents &= ~EMAC_IF_TX_EVENT;
-			emacps_check_tx( &xEMACif );
+			gmac_check_tx( &xEMACif );
 		}
 
 		if( ( uxISREvents & EMAC_IF_ERR_EVENT ) != 0 )
 		{
 			uxISREvents &= ~EMAC_IF_ERR_EVENT;
-			emacps_check_errors( &xEMACif );
+			gmac_check_errors( &xEMACif );
 		}
 
 		ulStatus = ulReadMDIO( PHY_REG_01_BMSR );

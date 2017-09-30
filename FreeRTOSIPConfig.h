@@ -78,6 +78,10 @@
 #ifndef FREERTOS_IP_CONFIG_H
 #define FREERTOS_IP_CONFIG_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* ipconfigMULTI_INTERFACE indicates that this project is linked with +TCP/multi.
 It is only needed temporarily, finally all code will be MULTI_INTERFACE. */
 
@@ -93,6 +97,14 @@ stack repeating the checksum calculations. */
 #define ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM		( 1 )
 #define ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM		( 1 )
 
+	/*
+	 * Note: tha SAM4E does have RX checksum offloading
+	 * but TX checksum offloading has NOT been implemented.
+	 */
+
+#define ipconfigHAS_TX_CRC_OFFLOADING				( 1 )
+#define ipconfigHAS_RX_CRC_OFFLOADING				( 1 )
+
 /* Several API's will block until the result is known, or the action has been
 performed, for example FreeRTOS_send() and FreeRTOS_recv().  The timeouts can be
 set per socket, using setsockopt().  If not set, the times below will be
@@ -100,10 +112,8 @@ used as defaults. */
 #define ipconfigSOCK_DEFAULT_RECEIVE_BLOCK_TIME	( 5000 )
 #define	ipconfigSOCK_DEFAULT_SEND_BLOCK_TIME	( 5000 )
 
-/* Include support for IPv6. */
-/*
-#define ipconfigUSE_IPv6					( 1 )
-*/
+#define ipconfigZERO_COPY_RX_DRIVER			( 1 )
+#define ipconfigZERO_COPY_TX_DRIVER			( 1 )
 
 /* Include support for LLMNR: Link-local Multicast Name Resolution
 (non-Microsoft) */
@@ -121,10 +131,10 @@ a socket. */
 #define ipconfigUSE_DNS_CACHE				( 1 )
 #define ipconfigDNS_CACHE_NAME_LENGTH		( 16 )
 #define ipconfigDNS_CACHE_ENTRIES			( 4 )
-#define ipconfigDNS_REQUEST_ATTEMPTS		( 2 )
+#define ipconfigDNS_REQUEST_ATTEMPTS		( 4 )
 
 /* The IP stack executes it its own task (although any application task can make
-use of its services through the published sockets API). ipconfigUDP_TASK_PRIORITY
+use of its services through the published sockets API). ipconfigIP_TASK_PRIORITY
 sets the priority of the task that executes the IP stack.  The priority is a
 standard FreeRTOS task priority so can take any value from 0 (the lowest
 priority) to (configMAX_PRIORITIES - 1) (the highest priority).
@@ -146,7 +156,7 @@ things such as a DHCP transaction number or initial sequence number.  Random
 number generation is performed via this macro to allow applications to use their
 own random number generation method.  For example, it might be possible to
 generate a random number by sampling noise on an analogue input. */
-extern UBaseType_t uxRand();
+extern UBaseType_t uxRand( void );
 #define ipconfigRAND32()	uxRand()
 
 /* If ipconfigUSE_NETWORK_EVENT_HOOK is set to 1 then FreeRTOS+TCP will call the
@@ -168,7 +178,7 @@ free) the network buffers are themselves blocked waiting for a network buffer.
 ipconfigMAX_SEND_BLOCK_TIME_TICKS is specified in RTOS ticks.  A time in
 milliseconds can be converted to a time in ticks by dividing the time in
 milliseconds by portTICK_PERIOD_MS. */
-#define ipconfigUDP_MAX_SEND_BLOCK_TIME_TICKS ( 5000 / portTICK_PERIOD_MS )
+#define ipconfigUDP_MAX_SEND_BLOCK_TIME_TICKS ( pdMS_TO_TICKS( 5000 ) )
 
 /* If ipconfigUSE_DHCP is 1 then FreeRTOS+TCP will attempt to retrieve an IP
 address, netmask, DNS server address and gateway address from a DHCP server.  If
@@ -179,6 +189,7 @@ reason.  The static configuration used is that passed into the stack by the
 FreeRTOS_IPInit() function call. */
 #define ipconfigUSE_DHCP				0
 #define ipconfigDHCP_REGISTER_HOSTNAME	1
+#define ipconfigDHCP_USES_UNICAST       1
 #define ipconfigUSE_DHCP_HOOK			1
 
 /* When ipconfigUSE_DHCP is set to 1, DHCP requests will be sent out at
@@ -229,11 +240,15 @@ not set to 1 then only FreeRTOS_indet_addr_quick() is available. */
 are available to the IP stack.  The total number of network buffers is limited
 to ensure the total amount of RAM that can be consumed by the IP stack is capped
 to a pre-determinable value. */
-#define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS		96
+
+#define GMAC_TX_BUFFERS			4
+#define GMAC_RX_BUFFERS			16
 
 /* Optimisation that allows more than one Rx buffer to be passed to the TCP task
 at a time - requires driver support. */
 #define ipconfigUSE_LINKED_RX_MESSAGES		( 1 )
+
+#define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS		( 32 )
 
 /* A FreeRTOS queue is used to send events from application tasks to the IP
 stack.  ipconfigEVENT_QUEUE_LENGTH sets the maximum number of events that can
@@ -270,11 +285,12 @@ contain.  For normal Ethernet V2 frames the maximum MTU is 1500.  Setting a
 lower value can save RAM, depending on the buffer management scheme used.  If
 ipconfigCAN_FRAGMENT_OUTGOING_PACKETS is 1 then (ipconfigNETWORK_MTU - 28) must
 be divisible by 8. */
-#define ipconfigNETWORK_MTU		1500
+
+#define ipconfigNETWORK_MTU					1500
 
 /* Set ipconfigUSE_DNS to 1 to include a basic DNS client/resolver.  DNS is used
 through the FreeRTOS_gethostbyname() API function. */
-#define ipconfigUSE_DNS			1
+#define ipconfigUSE_DNS		1
 
 /* If ipconfigREPLY_TO_INCOMING_PINGS is set to 1 then the IP stack will
 generate replies to incoming ICMP echo (ping) requests. */
@@ -291,7 +307,7 @@ FreeRTOS_SendPingRequest() API function is available. */
 /* If ipconfigFILTER_OUT_NON_ETHERNET_II_FRAMES is set to 1 then Ethernet frames
 that are not in Ethernet II format will be dropped.  This option is included for
 potential future IP stack developments. */
-#define ipconfigFILTER_OUT_NON_ETHERNET_II_FRAMES  1
+#define ipconfigFILTER_OUT_NON_ETHERNET_II_FRAMES 1
 
 /* If ipconfigETHERNET_DRIVER_FILTERS_FRAME_TYPES is set to 1 then it is the
 responsibility of the Ethernet interface to filter out packets that are of no
@@ -318,14 +334,14 @@ This has to do with the contents of the IP-packets: all 32-bit fields are
 TCP socket will use up to 2 x 6 descriptors, meaning that it can have 2 x 6
 outstanding packets (for Rx and Tx).  When using up to 10 TP sockets
 simultaneously, one could define TCP_WIN_SEG_COUNT as 120. */
-#define ipconfigTCP_WIN_SEG_COUNT				512
+#define ipconfigTCP_WIN_SEG_COUNT 64
 
 /* Each TCP socket has a circular buffers for Rx and Tx, which have a fixed
 maximum size.  Define the size of Rx buffer for TCP sockets. */
-#define ipconfigTCP_RX_BUFFER_LENGTH			( 0x4000 )
+#define ipconfigTCP_RX_BUFFER_LENGTH	( 3 * ipconfigTCP_MSS )
 
 /* Define the size of Tx buffer for TCP sockets. */
-#define ipconfigTCP_TX_BUFFER_LENGTH			( 0x4000 )
+#define ipconfigTCP_TX_BUFFER_LENGTH	( 2 * ipconfigTCP_MSS )
 
 /* When using call-back handlers, the driver may check if the handler points to
 real program memory (RAM or flash) or just has a random non-zero value. */
@@ -357,53 +373,13 @@ server task. */
 #define ipconfigNETWORK_BUFFER_DEBUG			0
 #define	ipconfigTCP_IP_SANITY					0
 
-/* Buffer and window sizes used by the FTP and HTTP servers respectively.  The
-FTP and HTTP servers both execute in the standard server task. */
-#if( USE_STEVE_CURRIE != 0 )
-	#define CURRIE_RX_BUFFER_LENGTH	(212988 * 2)
-	#define CURRIE_TX_BUFFER_LENGTH	(212988 * 2)
-	
-	#define	ipconfigFTP_TX_BUFSIZE   CURRIE_TX_BUFFER_LENGTH
-	#define	ipconfigFTP_TX_WINSIZE   ( CURRIE_TX_BUFFER_LENGTH / ( 2 * 1460 ) )
-	#define	ipconfigFTP_RX_BUFSIZE   CURRIE_RX_BUFFER_LENGTH
-	#define	ipconfigFTP_RX_WINSIZE   ( CURRIE_RX_BUFFER_LENGTH / ( 2 * 1460 ) )
-/*
-
-	prvWinScaleFactor: uxRxWinSize 89 MSS 1460 Factor 1
-	buffer = 262144
-	( CURRIE_TX_BUFFER_LENGTH / ( 2 * 1460 ) )
-	262144 / ( 2 * 1460 ) = 89
-	
-	89 * 1460 = 129940
-*/
-
-	#define CURRIE_TX_BUFFER_LENGTH	(212988 * 2)
-	#define	ipconfigIPERF_TX_BUFSIZE   CURRIE_TX_BUFFER_LENGTH
-	#define	ipconfigIPERF_TX_WINSIZE   ( CURRIE_TX_BUFFER_LENGTH / ( 2 * 1460 ) )
-	#define	ipconfigIPERF_RX_BUFSIZE   CURRIE_RX_BUFFER_LENGTH
-	#define	ipconfigIPERF_RX_WINSIZE   ( CURRIE_RX_BUFFER_LENGTH / ( 2 * 1460 ) )
-#else
-
-	#define ipconfigFTP_TX_BUFSIZE				( 256 * 1024 )
-	#define ipconfigFTP_TX_WINSIZE				( 12 )
-	#define ipconfigFTP_RX_BUFSIZE				( 256 * 1024 )
-	#define ipconfigFTP_RX_WINSIZE				( 12 )
-
-	#define ipconfigIPERF_TX_BUFSIZE    ( 128 * 1024 )	/* Units of bytes. */
-	#define ipconfigIPERF_TX_WINSIZE	( 48 )			/* Size in units of MSS */
-	#define ipconfigIPERF_RX_BUFSIZE	( 128 * 1024 )	/* Units of bytes. */
-	#define ipconfigIPERF_RX_WINSIZE	( 48 )			/* Size in units of MSS */
-
-#endif
+#define ipconfigIPERF_TX_BUFSIZE    ( 16 * ipconfigTCP_MSS )	/* Units of bytes. */
+#define ipconfigIPERF_TX_WINSIZE	( 8 )			/* Size in units of MSS */
+#define ipconfigIPERF_RX_BUFSIZE	( 16 * ipconfigTCP_MSS )	/* Units of bytes. */
+#define ipconfigIPERF_RX_WINSIZE	( 8 )			/* Size in units of MSS */
 
 
-
-#define ipconfigHTTP_TX_BUFSIZE				( 256 * 1024 )
-#define ipconfigHTTP_TX_WINSIZE				( 8 )
-#define ipconfigHTTP_RX_BUFSIZE				( 256 * 1024 )
-#define ipconfigHTTP_RX_WINSIZE				( 12 )
-
-#define ipconfigTCP_FILE_BUFFER_SIZE		( 8 * 1460 )
+#define ipconfigTCP_FILE_BUFFER_SIZE		( 8 * ipconfigTCP_MSS )
 
 /* When set to 1, the application writer must provide the implementation of a
 function with the following name and prototype:
@@ -414,9 +390,6 @@ The function must return pdTRUE if pcName matches a test name assigned to the
 device, and pdFALSE in all other cases.  */
 #define ipconfigDNS_USE_CALLBACKS			1
 
-/* Set to 1 if the driver's transmit function is using zero copy.  Otherwise set
-to 0. */
-#define ipconfigZERO_COPY_TX_DRIVER			1
 
 #define HTTP_COMMAND_BUFFER_SIZE			( 8 * 1460 )
 
@@ -434,9 +407,7 @@ extern int lUDPLoggingPrintf( const char *pcFormatString, ... );
 /* Set to 1 to print out debug messages.  If ipconfigHAS_DEBUG_PRINTF is set to
 1 then FreeRTOS_debug_printf should be defined to the function used to print
 out the debugging messages. */
-#ifndef ipconfigHAS_DEBUG_PRINTF
-	#define ipconfigHAS_DEBUG_PRINTF	0
-#endif
+#define ipconfigHAS_DEBUG_PRINTF	0
 #if( ipconfigHAS_DEBUG_PRINTF == 1 )
 	#define FreeRTOS_debug_printf(X)	lUDPLoggingPrintf X
 #endif
@@ -445,16 +416,11 @@ out the debugging messages. */
 FreeRTOS_netstat() command, and ping replies.  If ipconfigHAS_PRINTF is set to 1
 then FreeRTOS_printf should be set to the function used to print out the
 messages. */
-#ifndef ipconfigHAS_PRINTF
-	#define ipconfigHAS_PRINTF			1
-#endif
+#define ipconfigHAS_PRINTF			1
 #if( ipconfigHAS_PRINTF == 1 )
 	#define FreeRTOS_printf(X)			lUDPLoggingPrintf X
 #endif
 
-/* The example IP trace macros are included here so the definitions are
-available in all the FreeRTOS+TCP source files. */
-#include "DemoIPTrace.h"
 
 #if( configUSE_TASK_FPU_SUPPORT == 1 )
 	#define	iptraceEMAC_TASK_STARTING()			portTASK_USES_FLOATING_POINT()
@@ -486,8 +452,14 @@ available in all the FreeRTOS+TCP source files. */
 
 /*#define USE_IP_DROP_SELECTIVE_PORT		2020 */
 
+#define ipconfigSOCKET_HAS_USER_SEMAPHORE			1
+
 #define ipconfigIPERF_VERSION					3
 
 #define ipconfigENDPOINT_DNS_ADDRESS_COUNT		( 2 )
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif /* FREERTOS_IP_CONFIG_H */

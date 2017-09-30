@@ -14,6 +14,13 @@
 #include "queue.h"
 #include "semphr.h"
 
+/* FreeRTOS+TCP includes. */
+#include "FreeRTOS_IP.h"
+#include "FreeRTOS_Sockets.h"
+#include "FreeRTOS_IP_Private.h"
+#include "NetworkBufferManagement.h"
+#include "NetworkInterface.h"
+
 #include "cyclone_dma.h"
 #include "cyclone_emac.h"
 
@@ -32,22 +39,10 @@
 
 // static ALT_RSTMGR_t *pxResetManager = ( ALT_RSTMGR_t * ) RESET_MANAGER_ADDR;
 
-__attribute__ ( ( aligned( 32 ) ) ) gmac_tx_descriptor_t txDescriptors[ GMAC_TX_BUFFERS ];
-__attribute__ ( ( aligned( 32 ) ) ) gmac_rx_descriptor_t rxDescriptors[ GMAC_RX_BUFFERS ];
-
-//COMPILER_ALIGNED(8)
-//static gmac_tx_descriptor_t gs_tx_desc[ GMAC_TX_BUFFERS ];
-//#if( GMAC_USES_TX_CALLBACK != 0 )
-///** TX callback lists */
-//static gmac_dev_tx_cb_t gs_tx_callback[ GMAC_TX_BUFFERS ];
-//#endif
-///** RX descriptors lists */
-//COMPILER_ALIGNED(8)
-//static gmac_rx_descriptor_t gs_rx_desc[ GMAC_RX_BUFFERS ];
-
 extern const uint8_t ucMACAddress[ 6 ];
 
 uint32_t ulEMACVersion;
+uint32_t ulUsePHYAddress;
 
 uint32_t dwmac1000_read_version( int iMacID )
 {
@@ -438,7 +433,7 @@ TickType_t xStart = xTaskGetTickCount(), xEnd;
 	return 1;
 }
 
-static int gmac_mdio_read( int iMacID, int phyaddr, int phyreg)
+int gmac_mdio_read( int iMacID, int phyaddr, int phyreg)
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t mii_address = GMAC_MII_ADDR;
@@ -486,7 +481,7 @@ uint32_t value = MII_BUSY;
  * @phydata: phy data
  * Description: it writes the data into the MII register from within the device.
  */
-static int gmac_mdio_write( int iMacID, int phyaddr, int phyreg, uint16_t phydata )
+int gmac_mdio_write( int iMacID, int phyaddr, int phyreg, uint16_t phydata )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t mii_address = GMAC_MII_ADDR;
@@ -625,6 +620,7 @@ int phyaddr, iIndex;
 
 	dwmac1000_dma_axi( iMacID, &xAXI );
 
+	ulUsePHYAddress = 0;
 	for( phyaddr = 0; phyaddr < ARRAY_SIZE( phyIDs ); phyaddr++ )
 	{
 		ulUpperID = gmac_mdio_read( iMacID, phyaddr, 2 );
@@ -632,6 +628,7 @@ int phyaddr, iIndex;
 		phyIDs[ phyaddr ] = ( ( ( uint32_t ) ulUpperID ) << 16 ) | ( ulLowerID & 0xFFF0 );
 		if( ( ulUpperID != 0xffffu ) && ( ulLowerID != 0xffffu ) )
 		{
+			ulUsePHYAddress = phyaddr;
 			lUDPLoggingPrintf( "phy %d found\n", phyaddr );
 		}
 	}
@@ -682,3 +679,9 @@ int phyaddr, iIndex;
 
 	dwmac1000_rgsmii( iMacID, &xStats );
 }
+
+uint32_t Phy_Setup( EMACInterface_t *pxEMACif )
+{
+	return 1000;
+}
+
