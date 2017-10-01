@@ -21,9 +21,15 @@
 
 #include <string.h>
 
+/* FreeRTOS includes. */
 #include "FreeRTOS.h"
+#include "task.h"
+#include "queue.h"
+#include "semphr.h"
 
 #include "uncached_memory.h"
+
+#include "UDPLoggingPrintf.h"
 
 #define UNCACHED_MEMORY_SIZE	0x100000ul
 
@@ -91,7 +97,7 @@ static void vInitialiseUncachedMemory( )
 
 	if( ( ( uint32_t )pucStartOfMemory ) + UNCACHED_MEMORY_SIZE > DDR_MEMORY_END )
 	{
-		vLoggingPrintf("vInitialiseUncachedMemory: Can not allocate uncached memory\n" );
+		lUDPLoggingPrintf("vInitialiseUncachedMemory: Can not allocate uncached memory\n" );
 	}
 	else
 	{

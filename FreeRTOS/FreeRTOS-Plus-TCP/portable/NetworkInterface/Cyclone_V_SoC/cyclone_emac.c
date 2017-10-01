@@ -102,7 +102,7 @@ uint32_t value;
 }
 
 /* Enable disable MAC RX/TX */
-void stmmac_set_mac(int iMacID, bool enable)
+void gmac_enable_transmission(int iMacID, bool enable)
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
@@ -110,9 +110,13 @@ uint32_t value;
 	value = readl(ioaddr + MAC_CTRL_REG);
 
 	if (enable)
+	{
 		value |= MAC_ENABLE_RX | MAC_ENABLE_TX;
+	}
 	else
-		value &= ~(MAC_ENABLE_TX | MAC_ENABLE_RX);
+	{
+		value &= ~( MAC_ENABLE_TX | MAC_ENABLE_RX );
+	}
 
 	writel(value, ioaddr + MAC_CTRL_REG);
 }
@@ -529,7 +533,7 @@ volatile uint16_t ulLowerID, ulUpperID;
 
 ALT_SYSMGR_t *systemManager = ( ALT_SYSMGR_t * )ALT_SYSMGR_OFST;
 
-volatile uint8_t desc_copy[ sizeof( gmac_tx_descriptor_t ) ];
+volatile uint32_t desc_copy[ sizeof( gmac_tx_descriptor_t ) / 4 ];
 
 void dwmac1000_sys_init( int iMacID )
 {
@@ -585,40 +589,62 @@ int phyaddr, iIndex;
 		gmac_tx_descriptor_t desc;
 		memset( &desc, '\0', sizeof desc );
 		desc.own = 1;
+		desc.buf1_address = 0x000000ff;
+		desc.next_descriptor = 0x0000ff00;
 		memcpy( ( char * )desc_copy, &desc, sizeof desc_copy );
 	}
 
-	struct stmmac_axi xAXI;
-	memset( &xAXI, '\0', sizeof xAXI );
-	for( iIndex = 0; iIndex < ARRAY_SIZE( xAXI.axi_blen ); iIndex++ )
 	{
-		/* Get an array of 4, 8, 16, 32, 64, 128, and 256. */
-		xAXI.axi_blen[ iIndex ] = 0x04u << iIndex;
+		struct stmmac_axi xAXI;
+		memset( &xAXI, '\0', sizeof xAXI );
+		for( iIndex = 0; iIndex < ARRAY_SIZE( xAXI.axi_blen ); iIndex++ )
+		{
+			/* Get an array of 4, 8, 16, 32, 64, 128, and 256. */
+			xAXI.axi_blen[ iIndex ] = 0x04u << iIndex;
+		}
+		/* AXI Maximum Write OutStanding Request Limit. */
+		xAXI.axi_wr_osr_lmt = 1;
+		/* This value limits the maximum outstanding request
+		 * on the AXI read interface. Maximum outstanding
+		 * requests = RD_OSR_LMT+1 */
+		xAXI.axi_rd_osr_lmt = 1;
+		/* When set to 1, this bit enables the LPI mode */
+		xAXI.axi_lpi_en = 1;
+
+		/*  1 KB Boundary Crossing Enable for the GMAC-AXI
+		 * Master When set, the GMAC-AXI Master performs
+		 * burst transfers that do not cross 1 KB boundary.
+		 * When reset, the GMAC-AXI Master performs burst
+		 * transfers that do not cross 4 KB boundary.*/
+		xAXI.axi_kbbe = 0;
+		/* When set to 1, this bit enables the GMAC-AXI to
+		 * come out of the LPI mode only when the Remote
+		 * Wake Up Packet is received. When set to 0, this bit
+		 * enables the GMAC-AXI to come out of LPI mode
+		 * when any frame is received. This bit must be set to 0. */
+		xAXI.axi_xit_frm = 0;
+
+		dwmac1000_dma_axi( iMacID, &xAXI );
 	}
-	/* AXI Maximum Write OutStanding Request Limit. */
-	xAXI.axi_wr_osr_lmt = 1;
-	/* This value limits the maximum outstanding request
-	 * on the AXI read interface. Maximum outstanding
-	 * requests = RD_OSR_LMT+1 */
-	xAXI.axi_rd_osr_lmt = 1;
-	/* When set to 1, this bit enables the LPI mode */
-	xAXI.axi_lpi_en = 1;
+	{
+		struct stmmac_dma_cfg dma_cfg;
+		memset( &dma_cfg, '\0', sizeof dma_cfg );
 
-	/*  1 KB Boundary Crossing Enable for the GMAC-AXI
-	 * Master When set, the GMAC-AXI Master performs
-	 * burst transfers that do not cross 1 KB boundary.
-	 * When reset, the GMAC-AXI Master performs burst
-	 * transfers that do not cross 4 KB boundary.*/
-	xAXI.axi_kbbe = 0;
-	/* When set to 1, this bit enables the GMAC-AXI to
-	 * come out of the LPI mode only when the Remote
-	 * Wake Up Packet is received. When set to 0, this bit
-	 * enables the GMAC-AXI to come out of LPI mode
-	 * when any frame is received. This bit must be set to 0. */
-	xAXI.axi_xit_frm = 0;
-
-	dwmac1000_dma_axi( iMacID, &xAXI );
-
+		dma_cfg.txpbl = 16;
+		dma_cfg.rxpbl = 16;
+		dma_cfg.pblx8 = pdFALSE;
+		dma_cfg.fixed_burst = false;
+		dma_cfg.mixed_burst = true;
+		/* When this bit is set high and the FB bit is equal to 1,
+		the AHB or AXI interface generates all bursts aligned
+		to the start address LS bits. If the FB bit is equal to 0,
+		the first burst (accessing the data buffer's start
+		address) is not aligned, but subsequent bursts are
+		aligned to the address */
+		dma_cfg.aal = 0;
+		dwmac1000_dma_init( iMacID, &dma_cfg, pdFALSE /* atds */ );
+		dwmac1000_dma_operation_mode( iMacID, SF_DMA_MODE, SF_DMA_MODE, 1500 );
+	}
 	ulUsePHYAddress = 0;
 	for( phyaddr = 0; phyaddr < ARRAY_SIZE( phyIDs ); phyaddr++ )
 	{
@@ -645,7 +671,7 @@ int phyaddr, iIndex;
 
 	hw.ps = SPEED_1000;
 	dwmac1000_core_init( iMacID, &hw, 1500u );
-	stmmac_set_mac( iMacID, pdTRUE );
+	gmac_enable_transmission( iMacID, pdFALSE );
 	dwmac1000_rx_ipc_enable( iMacID, pdTRUE );
 
 	/* Write the main MAC address at position 0 */
@@ -674,7 +700,7 @@ int phyaddr, iIndex;
 	dwmac1000_ctrl_ane( iMacID, pdTRUE, pdFALSE, pdFALSE );
 
 	dwmac1000_rane( iMacID, pdTRUE );
-	vTaskDelay( 4000 );
+	vTaskDelay( 3000 );
 
 	dwmac1000_rgsmii( iMacID, &xStats );
 }

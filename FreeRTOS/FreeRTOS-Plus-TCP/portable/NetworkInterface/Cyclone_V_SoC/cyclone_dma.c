@@ -25,10 +25,6 @@
 #include "cyclone_dma.h"
 #include "cyclone_emac.h"
 
-#define ETH_MAX_PACKET_SIZE		( ( uint32_t ) 1524U )    /*!< ETH_HEADER + ETH_EXTRA + ETH_VLAN_TAG + ETH_MAX_ETH_PAYLOAD + ETH_CRC */
-#define ETH_TX_BUF_SIZE			ETH_MAX_PACKET_SIZE
-#define ETH_RX_BUF_SIZE         ETH_MAX_PACKET_SIZE 
-
 void dwmac1000_dma_axi( int iMacID, struct stmmac_axi *axi)
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
@@ -109,6 +105,10 @@ int rxpbl;
 	{
 		value |= DMA_BUS_MODE_MAXPBL;
 	}
+	else
+	{
+		value &= ~( DMA_BUS_MODE_MAXPBL );
+	}
 
 	value |= DMA_BUS_MODE_USP;
 	value &= ~(DMA_BUS_MODE_PBL_MASK | DMA_BUS_MODE_RPBL_MASK);
@@ -120,21 +120,39 @@ int rxpbl;
 	{
 		value |= DMA_BUS_MODE_FB;
 	}
+	else
+	{
+		value &= ~( DMA_BUS_MODE_FB );
+	}
 
 	/* Mixed Burst has no effect when fb is set */
 	if (dma_cfg->mixed_burst)
 	{
 		value |= DMA_BUS_MODE_MB;
 	}
+	else
+	{
+		value &= ~( DMA_BUS_MODE_MB );
+	}
 
 	if (atds)
 	{
+		/* Descriptor size is 32 bytes (8 DWORDS) */
 		value |= DMA_BUS_MODE_ATDS;
+	}
+	else
+	{
+		/* Descriptor size is 16 bytes (4 DWORDS) */
+		value &= ~( DMA_BUS_MODE_ATDS );
 	}
 
 	if (dma_cfg->aal)
 	{
 		value |= DMA_BUS_MODE_AAL;
+	}
+	else
+	{
+		value &= ~( DMA_BUS_MODE_AAL );
 	}
 
 	writel( value, ioaddr + DMA_BUS_MODE );
@@ -143,7 +161,45 @@ int rxpbl;
 	writel( DMA_INTR_DEFAULT_MASK, ioaddr + DMA_INTR_ENA );
 }
 
-#if 0
+void gmac_dma_start_tx( int iMacID, uint32_t chan )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+uint32_t value;
+
+	value = readl(ioaddr + DMA_CONTROL);
+	value |= DMA_CONTROL_ST;
+	writel(value, ioaddr + DMA_CONTROL);
+}
+
+void gmac_dma_stop_tx( int iMacID, uint32_t chan )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+uint32_t value;
+
+	value = readl(ioaddr + DMA_CONTROL);
+	value &= ~DMA_CONTROL_ST;
+	writel(value, ioaddr + DMA_CONTROL);
+}
+
+void gmac_dma_start_rx( int iMacID, uint32_t chan )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+uint32_t value;
+
+	value = readl(ioaddr + DMA_CONTROL);
+	value |= DMA_CONTROL_SR;
+	writel(value, ioaddr + DMA_CONTROL);
+}
+
+void gmac_dma_stop_rx( int iMacID, uint32_t chan )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+uint32_t value;
+
+	value = readl(ioaddr + DMA_CONTROL);
+	value &= ~DMA_CONTROL_SR;
+	writel(value, ioaddr + DMA_CONTROL);
+}
 
 static uint32_t dwmac1000_configure_fc(uint32_t csr6, int rxfifosz)
 {
@@ -156,7 +212,7 @@ static uint32_t dwmac1000_configure_fc(uint32_t csr6, int rxfifosz)
 	 */
 	if (rxfifosz < 4096) {
 		csr6 &= ~DMA_CONTROL_EFC;
-		pr_debug("GMAC: disabling flow control, rxfifo too small(%d)\n",
+		lUDPLoggingPrintf("GMAC: disabling flow control, rxfifo too small(%d)\n",
 			 rxfifosz);
 	} else {
 		csr6 |= DMA_CONTROL_EFC;
@@ -166,13 +222,14 @@ static uint32_t dwmac1000_configure_fc(uint32_t csr6, int rxfifosz)
 	return csr6;
 }
 
-static void dwmac1000_dma_operation_mode(void __iomem *ioaddr, int txmode,
-					 int rxmode, int rxfifosz)
+
+void dwmac1000_dma_operation_mode( int iMacID, int txmode, int rxmode, int rxfifosz )
 {
-	uint32_t csr6 = readl(ioaddr + DMA_CONTROL);
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+uint32_t csr6 = readl(ioaddr + DMA_CONTROL);
 
 	if (txmode == SF_DMA_MODE) {
-		pr_debug("GMAC: enable TX store and forward mode\n");
+		lUDPLoggingPrintf("GMAC: enable TX store and forward mode\n");
 		/* Transmit COE type 2 cannot be done in cut-through mode. */
 		csr6 |= DMA_CONTROL_TSF;
 		/* Operating on second frame increase the performance
@@ -180,7 +237,7 @@ static void dwmac1000_dma_operation_mode(void __iomem *ioaddr, int txmode,
 		 */
 		csr6 |= DMA_CONTROL_OSF;
 	} else {
-		pr_debug("GMAC: disabling TX SF (threshold %d)\n", txmode);
+		lUDPLoggingPrintf("GMAC: disabling TX SF (threshold %d)\n", txmode);
 		csr6 &= ~DMA_CONTROL_TSF;
 		csr6 &= DMA_CONTROL_TC_TX_MASK;
 		/* Set the transmit threshold */
@@ -197,10 +254,10 @@ static void dwmac1000_dma_operation_mode(void __iomem *ioaddr, int txmode,
 	}
 
 	if (rxmode == SF_DMA_MODE) {
-		pr_debug("GMAC: enable RX store and forward mode\n");
+		lUDPLoggingPrintf("GMAC: enable RX store and forward mode\n");
 		csr6 |= DMA_CONTROL_RSF;
 	} else {
-		pr_debug("GMAC: disable RX SF mode (threshold %d)\n", rxmode);
+		lUDPLoggingPrintf("GMAC: disable RX SF mode (threshold %d)\n", rxmode);
 		csr6 &= ~DMA_CONTROL_RSF;
 		csr6 &= DMA_CONTROL_TC_RX_MASK;
 		if (rxmode <= 32)
@@ -218,6 +275,8 @@ static void dwmac1000_dma_operation_mode(void __iomem *ioaddr, int txmode,
 
 	writel(csr6, ioaddr + DMA_CONTROL);
 }
+
+#if 0
 
 static void dwmac1000_dump_dma_regs(void __iomem *ioaddr, uint32_t *reg_space)
 {
@@ -291,9 +350,66 @@ const struct stmmac_dma_ops dwmac1000_dma_ops = {
 
 #endif
 
-BaseType_t gmac_tx_descriptor_init( int iMacID, gmac_tx_descriptor_t *pxDMATable, uint8_t *ucDataBuffer, uint32_t ulBufferCount )
+/* CSR1 enables the transmit DMA to check for new descriptor */
+void gmac_dma_transmit_poll( int iMacID )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+
+	writel( 1, ioaddr + DMA_XMT_POLL_DEMAND );
+}
+
+/* CSR2 enables the transmit DMA to check for new descriptor */
+void gmac_dma_reception_poll( int iMacID )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+
+	writel( 1, ioaddr + DMA_RCV_POLL_DEMAND );
+}
+
+gmac_rx_descriptor_t *gmac_get_rx_table( int iMacID )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+gmac_rx_descriptor_t *pxDMADescriptor;
+
+	/* Set the RxDesc pointer with the first one of the pxDMATable list */
+	pxDMADescriptor = ( gmac_rx_descriptor_t * )readl( ioaddr + DMA_RCV_BASE_ADDR );
+
+	return pxDMADescriptor;
+}
+
+void gmac_set_rx_table( int iMacID, gmac_rx_descriptor_t * pxDMATable )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+
+	/* Set the RxDesc pointer with the first one of the pxDMATable list */
+	writel( ( uint32_t ) pxDMATable, ioaddr + DMA_RCV_BASE_ADDR );
+}
+
+gmac_tx_descriptor_t *gmac_get_tx_table( int iMacID )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+gmac_tx_descriptor_t *pxDMADescriptor;
+
+	/* Set the TxDesc pointer with the first one of the pxDMATable list */
+	pxDMADescriptor = ( gmac_tx_descriptor_t * )readl( ioaddr + DMA_TX_BASE_ADDR );
+
+	return pxDMADescriptor;
+}
+
+void gmac_set_tx_table( int iMacID, gmac_tx_descriptor_t * pxDMATable )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+
+	/* Set the TxDesc pointer with the first one of the pxDMATable list */
+	writel( ( uint32_t ) pxDMATable, ioaddr + DMA_TX_BASE_ADDR );
+}
+
+#warning Debugging variables
+extern gmac_rx_descriptor_t *rx_table;
+extern gmac_tx_descriptor_t *tx_table;
+
+BaseType_t gmac_tx_descriptor_init( int iMacID, gmac_tx_descriptor_t *pxDMATable, uint8_t *ucDataBuffer, uint32_t ulBufferCount )
+{
 uint32_t i = 0;
 gmac_tx_descriptor_t *pxDMADescriptor;
 
@@ -301,7 +417,9 @@ gmac_tx_descriptor_t *pxDMADescriptor;
 
 	/* Set the TxDesc pointer with the first one of the pxDMATable list */
 
-	writel( ( uint32_t ) pxDMATable, ioaddr + DMA_TX_BASE_ADDR );
+	gmac_set_tx_table( iMacID, pxDMATable );
+
+	tx_table = gmac_get_tx_table( iMacID );
 
 	/* Fill each DMA descriptor with the right values */
 	for( i=0; i < ulBufferCount; i++ )
@@ -310,7 +428,7 @@ gmac_tx_descriptor_t *pxDMADescriptor;
 		pxDMADescriptor = pxDMATable + i;
 
 		/* Set Second Address Chained bit */
-		pxDMADescriptor->second_addr_chained = 1;
+		pxDMADescriptor->second_address_chained = 1;
 
 		/* Set Buffer1 address pointer */
 		if( ucDataBuffer != NULL )
@@ -347,7 +465,6 @@ gmac_tx_descriptor_t *pxDMADescriptor;
 
 BaseType_t gmac_rx_descriptor_init( int iMacID, gmac_rx_descriptor_t *pxDMATable, uint8_t *ucDataBuffer, uint32_t ulBufferCount )
 {
-uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t i = 0;
 BaseType_t xReturn = 1;
 gmac_rx_descriptor_t *pxDMADescriptor;
@@ -355,7 +472,9 @@ gmac_rx_descriptor_t *pxDMADescriptor;
 	memset( pxDMATable, '\0', ulBufferCount * sizeof( *pxDMATable ) );
 
 	/* Set the RxDesc pointer with the first one of the pxDMATable list */
-	writel( ( uint32_t ) pxDMATable, ioaddr + DMA_RCV_BASE_ADDR );
+	gmac_set_rx_table( iMacID, pxDMATable );
+
+	rx_table = gmac_get_rx_table( iMacID );
 
 	/* Fill each DMA descriptor with the right values */
 	for( i = 0; i < ulBufferCount; i++ )
@@ -410,14 +529,6 @@ gmac_rx_descriptor_t *pxDMADescriptor;
 	}
 
 	return xReturn;
-}
-
-void gmac_check_rx( EMACInterface_t *pxEMACif )
-{
-}
-
-void gmac_check_tx( EMACInterface_t *pxEMACif )
-{
 }
 
 void gmac_check_errors( EMACInterface_t *pxEMACif )

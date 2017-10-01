@@ -38,6 +38,10 @@ enum rx_tx_priority_ratio {
 #define DMA_BUS_MODE_MAXPBL	0x01000000
 #define DMA_BUS_MODE_AAL	0x02000000
 
+/* DMA Control register defines */
+#define DMA_CONTROL_ST		0x00002000	/* Start/Stop Transmission */
+#define DMA_CONTROL_SR		0x00000002	/* Start/Stop Receive */
+
 /* DMA Normal interrupt */
 #define DMA_INTR_ENA_NIE 0x00010000	/* Normal Summary */
 #define DMA_INTR_ENA_TIE 0x00000001	/* Transmit Interrupt */
@@ -99,6 +103,72 @@ enum rx_tx_priority_ratio {
 
 #define AXI_BLEN	7
 
+#define ETH_MAX_PACKET_SIZE		( ( uint32_t ) 1524U )    /*!< ETH_HEADER + ETH_EXTRA + ETH_VLAN_TAG + ETH_MAX_ETH_PAYLOAD + ETH_CRC */
+#define ETH_TX_BUF_SIZE			ETH_MAX_PACKET_SIZE
+#define ETH_RX_BUF_SIZE         ETH_MAX_PACKET_SIZE 
+
+/* Receive flow control activation field
+ * RFA field in DMA control register, bits 23,10:9
+ */
+#define DMA_CONTROL_RFA_MASK	0x00800600
+
+/* Receive flow control deactivation field
+ * RFD field in DMA control register, bits 22,12:11
+ */
+#define DMA_CONTROL_RFD_MASK	0x00401800
+
+#define DMA_CONTROL_EFC		0x00000100
+#define DMA_CONTROL_FEF		0x00000080
+#define DMA_CONTROL_FUF		0x00000040
+
+#define RFA_FULL_MINUS_1K	0x00000000
+#define RFA_FULL_MINUS_2K	0x00000200
+#define RFA_FULL_MINUS_3K	0x00000400
+#define RFA_FULL_MINUS_4K	0x00000600
+#define RFA_FULL_MINUS_5K	0x00800000
+#define RFA_FULL_MINUS_6K	0x00800200
+#define RFA_FULL_MINUS_7K	0x00800400
+
+#define RFD_FULL_MINUS_1K	0x00000000
+#define RFD_FULL_MINUS_2K	0x00000800
+#define RFD_FULL_MINUS_3K	0x00001000
+#define RFD_FULL_MINUS_4K	0x00001800
+#define RFD_FULL_MINUS_5K	0x00400000
+#define RFD_FULL_MINUS_6K	0x00400800
+#define RFD_FULL_MINUS_7K	0x00401000
+
+enum rtc_control {
+	DMA_CONTROL_RTC_64 = 0x00000000,
+	DMA_CONTROL_RTC_32 = 0x00000008,
+	DMA_CONTROL_RTC_96 = 0x00000010,
+	DMA_CONTROL_RTC_128 = 0x00000018,
+};
+#define DMA_CONTROL_TC_RX_MASK	0xffffffe7
+
+#define SF_DMA_MODE 1		/* DMA STORE-AND-FORWARD Operation Mode */
+
+#define DMA_CONTROL_TSF	0x00200000	/* Transmit  Store and Forward */
+
+#define DMA_CONTROL_OSF	0x00000004	/* Operate on second frame */
+
+/* DMA operation mode defines (start/stop tx/rx are placed in common header)*/
+/* Disable Drop TCP/IP csum error */
+#define DMA_CONTROL_DT		0x04000000
+#define DMA_CONTROL_RSF		0x02000000	/* Receive Store and Forward */
+#define DMA_CONTROL_DFF		0x01000000	/* Disaable flushing */
+
+enum ttc_control {
+	DMA_CONTROL_TTC_64 = 0x00000000,
+	DMA_CONTROL_TTC_128 = 0x00004000,
+	DMA_CONTROL_TTC_192 = 0x00008000,
+	DMA_CONTROL_TTC_256 = 0x0000c000,
+	DMA_CONTROL_TTC_40 = 0x00010000,
+	DMA_CONTROL_TTC_32 = 0x00014000,
+	DMA_CONTROL_TTC_24 = 0x00018000,
+	DMA_CONTROL_TTC_16 = 0x0001c000,
+};
+#define DMA_CONTROL_TC_TX_MASK	0xfffe3fff
+
 struct gmac_tx_descriptor
 {
 	uint32_t
@@ -119,7 +189,7 @@ struct gmac_tx_descriptor
 		transmit_ttamp_status : 1,	/* 17 This field is used as a status bit to indicate
 									      that a timestamp was captured for the described transmit frame */
 		reserved_2 : 2,				/* 18 */
-		second_addr_chained : 1,	/* 20 When set, this bit indicates that the second address
+		second_address_chained : 1,	/* 20 When set, this bit indicates that the second address
 									      in the descriptor is the Next descriptor
 									      address rather than the second buffer address */
 		transmit_end_of_ting : 1,	/* 21 When set, this bit indicates that the descriptor list
@@ -191,8 +261,23 @@ typedef struct xEMACInterface EMACInterface_t;
 BaseType_t gmac_tx_descriptor_init( int iMacID, gmac_tx_descriptor_t *pxDMATable, uint8_t *ucDataBuffer, uint32_t ulBufferCount );
 BaseType_t gmac_rx_descriptor_init( int iMacID, gmac_rx_descriptor_t *pxDMATable, uint8_t *ucDataBuffer, uint32_t ulBufferCount );
 
-void gmac_check_rx( EMACInterface_t *pxEMACif );
-void gmac_check_tx( EMACInterface_t *pxEMACif );
+void gmac_dma_start_tx( int iMacID, uint32_t chan );
+void gmac_dma_stop_tx( int iMacID, uint32_t chan );
+void gmac_dma_start_rx( int iMacID, uint32_t chan );
+void gmac_dma_stop_rx( int iMacID, uint32_t chan );
+
+/* Pass the address of the RX descriptor table to DMA. */
+void gmac_set_rx_table( int iMacID, gmac_rx_descriptor_t * pxDMATable );
+
+/* Pass the address of the TX descriptor table to DMA. */
+void gmac_set_tx_table( int iMacID, gmac_tx_descriptor_t * pxDMATable );
+
+gmac_rx_descriptor_t *gmac_get_rx_table( int iMacID );
+gmac_tx_descriptor_t *gmac_get_tx_table( int iMacID );
+
+void gmac_dma_transmit_poll( int iMacID );
+void gmac_dma_reception_poll( int iMacID );
+
 void gmac_check_errors( EMACInterface_t *pxEMACif );
 
 struct stmmac_axi
@@ -233,5 +318,7 @@ struct stmmac_dma_cfg
 
 extern void dwmac1000_dma_axi( int iMacID, struct stmmac_axi *axi );
 extern void dwmac1000_dma_init( int iMacID, struct stmmac_dma_cfg *dma_cfg, int atds );
+
+extern void dwmac1000_dma_operation_mode( int iMacID, int txmode, int rxmode, int rxfifosz );
 
 #endif /* CYCLONE_DMA_H */

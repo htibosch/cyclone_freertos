@@ -48,7 +48,7 @@ clean:
 	-@echo ' '
 
 post-build:
-	-arm-altera-eabi-size rtosdemo.elf
+	-arm-altera-eabi-objdump -h -S rtosdemo.elf > rtosdemo.lss
 	-@echo ' '
 
 .PHONY: all clean dependents

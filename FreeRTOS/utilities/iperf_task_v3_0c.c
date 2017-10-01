@@ -194,7 +194,10 @@ typedef struct
 #endif
 
 static List_t xTCPClientList;
-static uint32_t ulUDPRecvCount = 0, ulUDPRecvCountShown = 0, ulUDPRecvCountSeen = 0;
+#if( ipconfigIPERF_HAS_UDP != 0 )
+	static uint32_t ulUDPRecvCount = 0, ulUDPRecvCountShown = 0, ulUDPRecvCountSeen = 0;
+#endif
+
 static SocketSet_t xSocketSet;
 static TaskHandle_t pxIperfTask;
 
@@ -763,7 +766,7 @@ FreeRTOS_printf( ( "Control string: %s\n", pcReadBuffer ) );
 	}
 }
 
-#if( ipconfigUSE_CALLBACKS == 0 )
+#if( ipconfigUSE_CALLBACKS == 0 ) && ( ipconfigIPERF_HAS_UDP != 0 )
 	static void vIPerfUDPWork( Socket_t xSocket )
 	{
 	BaseType_t xRecvResult;
@@ -798,7 +801,7 @@ FreeRTOS_printf( ( "Control string: %s\n", pcReadBuffer ) );
 	}
 #endif /* ipconfigUSE_CALLBACKS == 0 */
 
-#if( ipconfigUSE_CALLBACKS != 0 )
+#if( ipconfigUSE_CALLBACKS != 0 ) && ( ipconfigIPERF_HAS_UDP != 0 )
 	static BaseType_t xOnUdpReceive( Socket_t xSocket, void * pvData, size_t xLength,
 		const struct freertos_sockaddr *pxFrom, const struct freertos_sockaddr *pxDest )
 	{

@@ -211,6 +211,9 @@ void dwmac1000_sys_init( int iMacID );
 void dwmac1000_rgsmii(int iMacID, EMACStats_t *pxStats);
 void dwmac1000_core_init(int iMacID, EMACDeviceInfo_t *hw, int mtu);
 
+/* Enable disable MAC RX/TX */
+void gmac_enable_transmission(int iMacID, bool enable);
+
 static __inline uint8_t *ucFirstIOAddres(int iMacID)
 {
 uint8_t *ucReturn;

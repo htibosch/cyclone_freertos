@@ -445,6 +445,37 @@ static BaseType_t xTasksAlreadyCreated = pdFALSE;
 }
 /*-----------------------------------------------------------*/
 
+#if( ipconfigUSE_DHCP_HOOK != 0 )
+	eDHCPCallbackAnswer_t xApplicationDHCPHook( eDHCPCallbackPhase_t eDHCPPhase, uint32_t ulIPAddress )
+	{
+	eDHCPCallbackAnswer_t xResult = eDHCPContinue;
+	static BaseType_t xUseDHCP = pdTRUE;
+
+		switch( eDHCPPhase )
+		{
+		case eDHCPPhasePreDiscover:		/* Driver is about to ask for a DHCP offer. */
+			/* Returning eDHCPContinue. */
+			break;
+		case eDHCPPhasePreRequest:		/* Driver is about to request DHCP an IP address. */
+			if( xUseDHCP == pdFALSE )
+			{
+				xResult = eDHCPStopNoChanges;
+			}
+			else
+			{
+				xResult = eDHCPContinue;
+			}
+			break;
+		}
+		lUDPLoggingPrintf( "DHCP %s: use = %d: %s\n",
+			( eDHCPPhase == eDHCPPhasePreDiscover ) ? "pre-discover" : "pre-request",
+			xUseDHCP,
+			xResult == eDHCPContinue ? "Continue" : "Stop" );
+		return xResult;
+	}
+#endif	/* ipconfigUSE_DHCP_HOOK */
+/*-----------------------------------------------------------*/
+
 void vApplicationMallocFailedHook( void )
 {
 	/* Called if a call to pvPortMalloc() fails because there is insufficient
@@ -745,4 +776,14 @@ caddr_t _sbrk(int incr)
 int _lseek(int file, int ptr, int dir)
 {
 	return 0;
+}
+
+//	void __attribute__ ( ( interrupt ) ) __cs3_isr_dabort( void )
+//	{
+//		while(1);
+//	}
+
+void __cs3_isr_dabort( void )
+{
+	vAssertCalled( __FILE__, __LINE__ );
 }
