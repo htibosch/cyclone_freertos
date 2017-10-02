@@ -28,16 +28,12 @@
 
 #include "UDPLoggingPrintf.h"
 
-#define RESET_MANAGER_ADDR		0xFFD05000
-
 #ifndef ARRAY_SIZE
 	#define ARRAY_SIZE(x)	(BaseType_t)(sizeof(x)/sizeof(x)[0])
 #endif
 
 /* The lowest 8 bits contain the IP's version number. We expect 0x37. */
 #define HAS_GMAC4		( ( ulEMACVersion & 0xff ) >= 0x40 )
-
-// static ALT_RSTMGR_t *pxResetManager = ( ALT_RSTMGR_t * ) RESET_MANAGER_ADDR;
 
 extern const uint8_t ucMACAddress[ 6 ];
 
@@ -608,7 +604,7 @@ int phyaddr, iIndex;
 		 * on the AXI read interface. Maximum outstanding
 		 * requests = RD_OSR_LMT+1 */
 		xAXI.axi_rd_osr_lmt = 1;
-		/* When set to 1, this bit enables the LPI mode */
+		/* When set to 1, this bit enables the LPI mode (Low Poer Idle) */
 		xAXI.axi_lpi_en = 1;
 
 		/*  1 KB Boundary Crossing Enable for the GMAC-AXI
@@ -633,8 +629,8 @@ int phyaddr, iIndex;
 		dma_cfg.txpbl = 16;
 		dma_cfg.rxpbl = 16;
 		dma_cfg.pblx8 = pdFALSE;
-		dma_cfg.fixed_burst = false;
-		dma_cfg.mixed_burst = true;
+		dma_cfg.fixed_burst = pdTRUE;	// false;
+		dma_cfg.mixed_burst = pdFALSE;
 		/* When this bit is set high and the FB bit is equal to 1,
 		the AHB or AXI interface generates all bursts aligned
 		to the start address LS bits. If the FB bit is equal to 0,
@@ -667,6 +663,7 @@ int phyaddr, iIndex;
 		return;
 	}
 
+	/* Using the RGMII interface. */
 	dwmac1000_rgsmii( iMacID, &xStats );
 
 	hw.ps = SPEED_1000;

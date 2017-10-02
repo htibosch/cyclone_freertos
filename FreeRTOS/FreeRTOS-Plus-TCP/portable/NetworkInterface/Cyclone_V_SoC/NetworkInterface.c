@@ -81,6 +81,9 @@ expansion. */
 #define EMAC_IF_ALL_EVENT       ( EMAC_IF_RX_EVENT | EMAC_IF_TX_EVENT | EMAC_IF_ERR_EVENT )
 
 
+#include "socal/hps.h"
+#include "socal/alt_rstmgr.h"
+
 #include "cyclone_dma.h"
 #include "cyclone_emac.h"
 
@@ -213,9 +216,13 @@ size_t uxCount = ( ( UBaseType_t ) GMAC_TX_BUFFERS ) - uxSemaphoreGetCount( xTXD
 }
 /*-----------------------------------------------------------*/
 
+#define RESET_MANAGER_ADDR		0xFFD05000
+volatile ALT_RSTMGR_t *pxResetManager;
 gmac_tx_descriptor_t *pxDmaTransmit;
 gmac_rx_descriptor_t *rx_table;
 gmac_tx_descriptor_t *tx_table;
+EMAC_config_t *pxMAC_Config;
+SYSMGR_EMACGRP_t * sysmgr_emacgrp;
 
 BaseType_t xNetworkInterfaceInitialise( void )
 {
@@ -225,6 +232,20 @@ BaseType_t xLinkStatus;
 	/* Guard against the init function being called more than once. */
 	if( xEMACTaskHandle == NULL )
 	{
+		#warning Debugging : just checking the reset flags of all modules, need emac1 and dma
+		pxResetManager = ( volatile ALT_RSTMGR_t * ) RESET_MANAGER_ADDR;
+		pxResetManager->permodrst.emac1 = 1;
+
+		pxMAC_Config = ( EMAC_config_t * )( ucFirstIOAddres( iMacID ) );
+		pxMAC_Config->prelen = 1;
+		sysmgr_emacgrp = ( SYSMGR_EMACGRP_t * ) ( ALT_SYSMGR_OFST + 0x60 );
+		sysmgr_emacgrp->physel_0 = SYSMGR_EMACGRP_CTRL_PHYSEL_ENUM_RGMII;
+		sysmgr_emacgrp->physel_1 = SYSMGR_EMACGRP_CTRL_PHYSEL_ENUM_RGMII;
+
+		vTaskDelay( 500ul );
+		pxResetManager->permodrst.emac1 = 0;
+		vTaskDelay( 500ul );
+
 		if( xTXDescriptorSemaphore == NULL )
 		{
 			xTXDescriptorSemaphore = xSemaphoreCreateCounting( ( UBaseType_t ) GMAC_TX_BUFFERS, ( UBaseType_t ) GMAC_TX_BUFFERS );

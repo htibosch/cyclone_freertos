@@ -207,6 +207,56 @@ struct xEMACDeviceInfo
 
 typedef struct xEMACDeviceInfo EMACDeviceInfo_t;
 
+struct xEMAC_config {
+	unsigned
+		prelen          : 2,			/*  0  prelen */
+		rx_enable       : 1,			/*  2  re  */
+		tx_enable       : 1,			/*  3  te  */
+		deferral_check  : 1,			/*  4  dc  */
+		back_off_limit  : 2,			/*  5  bl  */
+		auto_crc_strip  : 1,			/*  7  acs */
+		link_up_down    : 1,			/*  8  lud */
+		single_transmis : 1,			/*  9  dr  */
+		ip_checksum     : 1,			/* 10  ipc */
+		full_duplex_mode: 1,			/* 11  dm  */
+		loop_back_mode  : 1,			/* 12  lm  */
+		disable_rx      : 1,			/* 13  do  */
+		link_speed      : 1,			/* 14  fes */
+		use_MII         : 1,			/* 15  ps  */
+		dcrss           : 1,			/* 16  dcrss */
+		inter_frame_gap : 3,			/* 17  */
+		ignore_jumbo_err: 1,			/* 20  je  */
+		burts_enable    : 1,			/* 21  be  */
+		jabber_timer_dis: 1,			/* 22  jd  */
+		disable_watchdog: 1,			/* 23  wd  */
+		trans_dupl_mode : 1,			/* 24  tc  */
+		strip_eth_frames: 1,			/* 25  cst */
+		reserved_1      : 1,			/* 26  */
+		twokpe          : 1,			/* 27  */
+		reserved_2      : 4;			/* 28  */
+};
+
+
+typedef struct xEMAC_config EMAC_config_t;
+
+#define SYSMGR_EMACGRP_CTRL_PHYSEL_ENUM_GMII_MII 0x0
+#define SYSMGR_EMACGRP_CTRL_PHYSEL_ENUM_RGMII 0x1
+#define SYSMGR_EMACGRP_CTRL_PHYSEL_ENUM_RMII 0x2
+#define SYSMGR_EMACGRP_CTRL_PHYSEL_WIDTH 2
+#define SYSMGR_EMACGRP_CTRL_PHYSEL_MASK 0x00000003
+#define SYSMGR_EMACGRP_CTRL_PTP_REF_CLK_MASK 0x00000010
+
+struct xSYSMGR_EMACGRP {
+	uint32_t
+		physel_0 : 2,
+		physel_1 : 2,
+		ptpclksel_0 : 1,
+		ptpclksel_1 : 1,
+		reserved : 26;
+};
+
+typedef struct xSYSMGR_EMACGRP SYSMGR_EMACGRP_t;
+
 void dwmac1000_sys_init( int iMacID );
 void dwmac1000_rgsmii(int iMacID, EMACStats_t *pxStats);
 void dwmac1000_core_init(int iMacID, EMACDeviceInfo_t *hw, int mtu);
