@@ -8,8 +8,7 @@ C_SRCS += \
 ../FreeRTOS/FreeRTOS_v9.0.0/event_groups.c \
 ../FreeRTOS/FreeRTOS_v9.0.0/list.c \
 ../FreeRTOS/FreeRTOS_v9.0.0/queue.c \
-../FreeRTOS/FreeRTOS_v9.0.0/tasks.c \
-../FreeRTOS/FreeRTOS_v9.0.0/timers.c 
+../FreeRTOS/FreeRTOS_v9.0.0/tasks.c 
 
 O_SRCS += \
 ../FreeRTOS/FreeRTOS_v9.0.0/event_groups.o \
@@ -23,16 +22,14 @@ OBJS += \
 ./FreeRTOS/FreeRTOS_v9.0.0/event_groups.o \
 ./FreeRTOS/FreeRTOS_v9.0.0/list.o \
 ./FreeRTOS/FreeRTOS_v9.0.0/queue.o \
-./FreeRTOS/FreeRTOS_v9.0.0/tasks.o \
-./FreeRTOS/FreeRTOS_v9.0.0/timers.o 
+./FreeRTOS/FreeRTOS_v9.0.0/tasks.o 
 
 C_DEPS += \
 ./FreeRTOS/FreeRTOS_v9.0.0/croutine.d \
 ./FreeRTOS/FreeRTOS_v9.0.0/event_groups.d \
 ./FreeRTOS/FreeRTOS_v9.0.0/list.d \
 ./FreeRTOS/FreeRTOS_v9.0.0/queue.d \
-./FreeRTOS/FreeRTOS_v9.0.0/tasks.d \
-./FreeRTOS/FreeRTOS_v9.0.0/timers.d 
+./FreeRTOS/FreeRTOS_v9.0.0/tasks.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes

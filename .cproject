@@ -94,8 +94,11 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
+					<fileInfo id="cdt.managedbuild.config.gnu.cross.exe.debug.840887560.1675240082" name="timers.c" rcbsApplicability="disable" resourcePath="FreeRTOS/FreeRTOS_v9.0.0/timers.c" toolsToInvoke="cdt.managedbuild.tool.gnu.cross.c.compiler.909202128.115506195">
+						<tool id="cdt.managedbuild.tool.gnu.cross.c.compiler.909202128.115506195" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler.909202128"/>
+					</fileInfo>
 					<sourceEntries>
-						<entry excluding="FreeRTOS/FreeRTOS-Plus-TCP/portable/BufferManagement/BufferAllocation_2.c|FreeRTOS/FreeRTOS-Plus-TCP/EchoClients|FreeRTOS/FreeRTOS-Plus-TCP/Test_Code|FreeRTOS/FreeRTOS-Plus-TCP/portable/NetworkInterface|FreeRTOS/FreeRTOS-Plus-TCP/protocols|LEDs.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="FreeRTOS/FreeRTOS_v9.0.0/timers.c|FreeRTOS/FreeRTOS-Plus-TCP/portable/BufferManagement/BufferAllocation_2.c|FreeRTOS/FreeRTOS-Plus-TCP/EchoClients|FreeRTOS/FreeRTOS-Plus-TCP/Test_Code|FreeRTOS/FreeRTOS-Plus-TCP/portable/NetworkInterface|FreeRTOS/FreeRTOS-Plus-TCP/protocols|LEDs.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="FreeRTOS/FreeRTOS-Plus-TCP/portable/NetworkInterface/Cyclone_V_SoC"/>
 					</sourceEntries>
 				</configuration>

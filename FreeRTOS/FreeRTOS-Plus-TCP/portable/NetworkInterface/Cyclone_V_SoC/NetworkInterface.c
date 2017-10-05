@@ -72,6 +72,7 @@
 #include "FreeRTOS_IP_Private.h"
 #include "NetworkBufferManagement.h"
 #include "NetworkInterface.h"
+
 /* Interrupt events to process.  Currently only the Rx event is processed
 although code for other events is included to allow for possible future
 expansion. */
@@ -83,6 +84,7 @@ expansion. */
 
 #include "socal/hps.h"
 #include "socal/alt_rstmgr.h"
+#include "alt_cache.h"
 
 #include "cyclone_dma.h"
 #include "cyclone_emac.h"
@@ -159,8 +161,10 @@ EMACInterface_t xEMACif;
 
 static int iMacID = 1;
 
-__attribute__ ( ( aligned( 32 ) ) ) gmac_tx_descriptor_t txDescriptors[ GMAC_TX_BUFFERS ];
-__attribute__ ( ( aligned( 32 ) ) ) gmac_rx_descriptor_t rxDescriptors[ GMAC_RX_BUFFERS ];
+//__attribute__ ( ( aligned( 4096 ) ) ) __attribute__ ((section (".ddr_sdram"))) gmac_tx_descriptor_t txDescriptors[ GMAC_TX_BUFFERS ];
+//__attribute__ ( ( aligned( 4096 ) ) ) __attribute__ ((section (".ddr_sdram"))) gmac_rx_descriptor_t rxDescriptors[ GMAC_RX_BUFFERS ];
+__attribute__ ( ( aligned( 64 ) ) ) __attribute__ ((section (".ram"))) gmac_tx_descriptor_t txDescriptors[ GMAC_TX_BUFFERS ];
+__attribute__ ( ( aligned( 64 ) ) ) __attribute__ ((section (".ram"))) gmac_rx_descriptor_t rxDescriptors[ GMAC_RX_BUFFERS ];
 
 static gmac_tx_descriptor_t *pxNextTxDesc = txDescriptors;
 static gmac_tx_descriptor_t *DMATxDescToClear = txDescriptors;
@@ -223,6 +227,8 @@ gmac_rx_descriptor_t *rx_table;
 gmac_tx_descriptor_t *tx_table;
 EMAC_config_t *pxMAC_Config;
 SYSMGR_EMACGRP_t * sysmgr_emacgrp;
+volatile uint32_t desc_copy[ sizeof( gmac_tx_descriptor_t ) / 4 ];
+volatile DMA_STATUS_REG_t *dma_status_reg;
 
 BaseType_t xNetworkInterfaceInitialise( void )
 {
@@ -241,6 +247,7 @@ BaseType_t xLinkStatus;
 		sysmgr_emacgrp = ( SYSMGR_EMACGRP_t * ) ( ALT_SYSMGR_OFST + 0x60 );
 		sysmgr_emacgrp->physel_0 = SYSMGR_EMACGRP_CTRL_PHYSEL_ENUM_RGMII;
 		sysmgr_emacgrp->physel_1 = SYSMGR_EMACGRP_CTRL_PHYSEL_ENUM_RGMII;
+		dma_status_reg = ( volatile DMA_STATUS_REG_t * ) ( ucFirstIOAddres( iMacID ) + DMA_STATUS );
 
 		vTaskDelay( 500ul );
 		pxResetManager->permodrst.emac1 = 0;
@@ -260,14 +267,24 @@ BaseType_t xLinkStatus;
 		gmac_tx_descriptor_init( iMacID, txDescriptors, ( uint8_t *) NULL, GMAC_TX_BUFFERS );
 		gmac_rx_descriptor_init( iMacID, rxDescriptors, ( uint8_t *) NULL, GMAC_RX_BUFFERS );
 
+
+		/* Set the TxDesc pointer with the first one of the txDescriptors list */
+		gmac_set_tx_table( iMacID, txDescriptors );
+
+		/* Set the RxDesc pointer with the first one of the rxDescriptors list */
+		gmac_set_rx_table( iMacID, rxDescriptors );
+
 		gmac_dma_start_tx( iMacID, 0 );
 		gmac_dma_start_rx( iMacID, 0 );
-
+alt_cache_l2_sync();
 		gmac_enable_transmission( iMacID, pdTRUE );
 
 		gmac_dma_reception_poll( iMacID );
+		gmac_dma_start_rx( iMacID, 0 );
 
 		prvGMACWaitLS( xWaitLinkDelay );
+
+if( dma_status_reg->ulValue ) {}
 
 		/* The deferred interrupt handler task is created at the highest
 		possible priority to ensure the interrupt handler can return directly
@@ -361,7 +378,7 @@ const TickType_t xBlockTimeTicks = pdMS_TO_TICKS( 50u );
 					/* Move the buffer. */
 					pxDmaTxDesc->buf1_address = ( uint32_t )pxDescriptor->pucEthernetBuffer;
 					/* The Network Buffer has been passed to DMA, no need to release it. */
-					bReleaseAfterSend = pdFALSE_UNSIGNED;
+					bReleaseAfterSend = pdFALSE;
 				}
 				#endif /* ipconfigZERO_COPY_TX_DRIVER */
 
@@ -380,11 +397,14 @@ const TickType_t xBlockTimeTicks = pdMS_TO_TICKS( 50u );
 				pxDmaTxDesc->buf1_byte_count = ulTransmitSize;
 				/* Set Own bit of the Tx descriptor Status: gives the buffer back to ETHERNET DMA */
 				pxDmaTxDesc->own = 1;
-
+memcpy( desc_copy, pxDmaTxDesc, sizeof desc_copy );
 				/* Point to next descriptor */
 				pxNextTxDesc = ( gmac_tx_descriptor_t * ) ( pxNextTxDesc->next_descriptor );
 				/* Ensure completion of memory access */
 				__DSB();
+alt_cache_l2_sync();
+
+				gmac_dma_start_tx( iMacID, 0 );
 				/* Resume DMA transmission*/
 				gmac_dma_transmit_poll( iMacID );
 
@@ -455,7 +475,9 @@ BaseType_t xReturn;
 
 void vNetworkInterfaceAllocateRAMToBuffers( NetworkBufferDescriptor_t pxNetworkBuffers[ ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS ] )
 {
-static uint8_t ucNetworkPackets[ ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS * ETH_MAX_PACKET_SIZE ] __attribute__ ( ( aligned( 32 ) ) );
+static uint8_t __attribute__ ( ( aligned( 32 ) ) ) __attribute__ ((section (".ddr_sdram")))
+	ucNetworkPackets[ ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS * ETH_MAX_PACKET_SIZE ] ;
+
 uint8_t *ucRAMBuffer = ucNetworkPackets;
 uint32_t ul;
 

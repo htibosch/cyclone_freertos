@@ -137,6 +137,9 @@ enum rx_tx_priority_ratio {
 #define RFD_FULL_MINUS_6K	0x00400800
 #define RFD_FULL_MINUS_7K	0x00401000
 
+/* Rx watchdog register */
+#define DMA_RX_WATCHDOG		0x00001024
+
 enum rtc_control {
 	DMA_CONTROL_RTC_64 = 0x00000000,
 	DMA_CONTROL_RTC_32 = 0x00000008,
@@ -156,6 +159,9 @@ enum rtc_control {
 #define DMA_CONTROL_DT		0x04000000
 #define DMA_CONTROL_RSF		0x02000000	/* Receive Store and Forward */
 #define DMA_CONTROL_DFF		0x01000000	/* Disaable flushing */
+
+
+#define USE_ATDS			1
 
 enum ttc_control {
 	DMA_CONTROL_TTC_64 = 0x00000000,
@@ -186,7 +192,7 @@ struct gmac_tx_descriptor
 		jabber_timeout : 1,         /* 14 */
 		error_summary : 1,          /* 15 */
 		ip_header_error : 1,        /* 16 */
-		transmit_ttamp_status : 1,	/* 17 This field is used as a status bit to indicate
+		transmit_stamp_status : 1,	/* 17 This field is used as a status bit to indicate
 									      that a timestamp was captured for the described transmit frame */
 		reserved_2 : 2,				/* 18 */
 		second_address_chained : 1,	/* 20 When set, this bit indicates that the second address
@@ -212,6 +218,12 @@ struct gmac_tx_descriptor
 		buf1_address;
 	uint32_t
 		next_descriptor;
+	#if ( USE_ATDS != 0 )
+		uint32_t reserved_32_1;
+		uint32_t reserved_32_2;
+		uint32_t time_stamp_low;
+		uint32_t time_stamp_high;
+	#endif
 };
 
 struct gmac_rx_descriptor
@@ -248,10 +260,53 @@ struct gmac_rx_descriptor
 		buf1_address;
 	uint32_t
 		next_descriptor;
+	#if ( USE_ATDS != 0 )
+		uint32_t reserved_32_1;
+		uint32_t reserved_32_2;
+		uint32_t time_stamp_low;
+		uint32_t time_stamp_high;
+	#endif
 };
 
 typedef struct gmac_tx_descriptor gmac_tx_descriptor_t;
 typedef struct gmac_rx_descriptor gmac_rx_descriptor_t;
+
+struct xDMA_STATUS_REG
+{
+	union {
+		uint32_t ulValue;
+		struct {
+			uint32_t
+				ti_trans_complete : 1,		/*  0 */
+				tps_trans_stopped : 1,		/*  1 */
+				tu_cannot_acquire : 1,		/*  2 */
+				tjt_tr_jabber_timer : 1,	/*  3 */
+				ovf_recv_overflow : 1,		/*  4 */
+				unf_tr_underflow : 1,		/*  5 */
+				ri_recv_complete : 1,		/*  6 */
+				ru_cannot_acquire : 1,		/*  7 */
+				rps_recv_proc_stop : 1,		/*  8 */
+				rwt_recv_long_frame : 1,	/*  9 */
+				eti_tr_to_fifo : 1,			/* 10 */
+				reserved_1 : 2,				/* 11 */
+				fbi_bus_error : 1,			/* 13 */
+				eri_rev_first_buf : 1,		/* 14 */
+				ais_abnormal_int : 1,		/* 15 */
+				nis_normal_int : 1,			/* 16 */
+				rs_recv_state : 3,			/* 17 */
+				ts_xmit_state : 3,			/* 20 */
+				eb_bus_error : 3,			/* 23 */
+				gli_GMAC_line_int : 1,		/* 26 */
+				gmi_GMAC_MMC_int : 1,		/* 27 */
+				reserved_2 : 1,				/* 28 */
+				tti_stamp_trig_int : 1,		/* 29 */
+				glpii_GMAC_LPI_int : 1,		/* 30 */
+				reserved_3 : 1;				/* 31 */
+		};
+	};
+};
+
+typedef struct xDMA_STATUS_REG DMA_STATUS_REG_t;
 
 struct xEMACInterface {
 };
@@ -317,8 +372,8 @@ struct stmmac_dma_cfg
 };
 
 extern void dwmac1000_dma_axi( int iMacID, struct stmmac_axi *axi );
-extern void dwmac1000_dma_init( int iMacID, struct stmmac_dma_cfg *dma_cfg, int atds );
+extern void dwmac1000_dma_init( int iMacID, struct stmmac_dma_cfg *dma_cfg );
 
-extern void dwmac1000_dma_operation_mode( int iMacID, int txmode, int rxmode, int rxfifosz );
-
+extern void dwmac1000_dma_operation_mode( int iMacID, int txmode, int rxmode );
+				  
 #endif /* CYCLONE_DMA_H */

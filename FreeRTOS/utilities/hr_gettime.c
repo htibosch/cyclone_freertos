@@ -98,8 +98,9 @@ uint64_t ullGetHighResolutionTime( void )
 {
 uint64_t ullReturn;
 
-	ullReturn = ( uint64_t ) xTaskGetTickCount();
-	ullReturn = 1000ull * ullReturn;
+//	ullReturn = ( uint64_t ) xTaskGetTickCount();
+//	ullReturn = 1000ull * ullReturn;
 
+	ullReturn = alt_globaltmr_get64() / 200ull;
 	return ullReturn;
 }

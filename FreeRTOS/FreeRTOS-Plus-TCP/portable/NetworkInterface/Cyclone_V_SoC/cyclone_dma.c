@@ -25,6 +25,8 @@
 #include "cyclone_dma.h"
 #include "cyclone_emac.h"
 
+#include "socal/alt_emac.h"
+
 void dwmac1000_dma_axi( int iMacID, struct stmmac_axi *axi)
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
@@ -70,22 +72,22 @@ int i;
 		case 32:
 			value |= DMA_AXI_BLEN32;
 			break;
-		case 16:
-			value |= DMA_AXI_BLEN16;
-			break;
-		case 8:
-			value |= DMA_AXI_BLEN8;
-			break;
-		case 4:
-			value |= DMA_AXI_BLEN4;
-			break;
+//		case 16:
+//			value |= DMA_AXI_BLEN16;
+//			break;
+//		case 8:
+//			value |= DMA_AXI_BLEN8;
+//			break;
+//		case 4:
+//			value |= DMA_AXI_BLEN4;
+//			break;
 		}
 	}
 
 	writel(value, ioaddr + DMA_AXI_BUS_MODE);
 }
 
-void dwmac1000_dma_init( int iMacID, struct stmmac_dma_cfg *dma_cfg, int atds )
+void dwmac1000_dma_init( int iMacID, struct stmmac_dma_cfg *dma_cfg )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
@@ -110,7 +112,9 @@ int rxpbl;
 		value &= ~( DMA_BUS_MODE_MAXPBL );
 	}
 
-	value |= DMA_BUS_MODE_USP;
+//	value |= DMA_BUS_MODE_USP;
+
+	value |= ALT_EMAC_DMA_BUS_MOD_EIGHTXPBL_SET_MSK;
 	value &= ~(DMA_BUS_MODE_PBL_MASK | DMA_BUS_MODE_RPBL_MASK);
 	value |= (txpbl << DMA_BUS_MODE_PBL_SHIFT);
 	value |= (rxpbl << DMA_BUS_MODE_RPBL_SHIFT);
@@ -135,16 +139,17 @@ int rxpbl;
 		value &= ~( DMA_BUS_MODE_MB );
 	}
 
-	if (atds)
+	#if ( USE_ATDS != 0 )
 	{
 		/* Descriptor size is 32 bytes (8 DWORDS) */
 		value |= DMA_BUS_MODE_ATDS;
 	}
-	else
+	#else
 	{
 		/* Descriptor size is 16 bytes (4 DWORDS) */
 		value &= ~( DMA_BUS_MODE_ATDS );
 	}
+	#endif
 
 	if (dma_cfg->aal)
 	{
@@ -166,7 +171,9 @@ void gmac_dma_start_tx( int iMacID, uint32_t chan )
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
+	/* DMA_CONTROL, also called Operation Mode. */
 	value = readl(ioaddr + DMA_CONTROL);
+	/* Transmission in Run State */
 	value |= DMA_CONTROL_ST;
 	writel(value, ioaddr + DMA_CONTROL);
 }
@@ -177,6 +184,7 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	value = readl(ioaddr + DMA_CONTROL);
+	/* Transmission Stopped State */
 	value &= ~DMA_CONTROL_ST;
 	writel(value, ioaddr + DMA_CONTROL);
 }
@@ -187,6 +195,7 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	value = readl(ioaddr + DMA_CONTROL);
+	/* Rx DMA operation is started */
 	value |= DMA_CONTROL_SR;
 	writel(value, ioaddr + DMA_CONTROL);
 }
@@ -197,11 +206,12 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	value = readl(ioaddr + DMA_CONTROL);
+	/* Rx DMA operation is stopped */
 	value &= ~DMA_CONTROL_SR;
 	writel(value, ioaddr + DMA_CONTROL);
 }
 
-static uint32_t dwmac1000_configure_fc(uint32_t csr6, int rxfifosz)
+static uint32_t dwmac1000_configure_fc(uint32_t csr6 )
 {
 	csr6 &= ~DMA_CONTROL_RFA_MASK;
 	csr6 &= ~DMA_CONTROL_RFD_MASK;
@@ -210,20 +220,14 @@ static uint32_t dwmac1000_configure_fc(uint32_t csr6, int rxfifosz)
 	 * 4K or 0. Otherwise, send XOFF when fifo is 1K less than full,
 	 * and send XON when 2K less than full.
 	 */
-	if (rxfifosz < 4096) {
-		csr6 &= ~DMA_CONTROL_EFC;
-		lUDPLoggingPrintf("GMAC: disabling flow control, rxfifo too small(%d)\n",
-			 rxfifosz);
-	} else {
-		csr6 |= DMA_CONTROL_EFC;
-		csr6 |= RFA_FULL_MINUS_1K;
-		csr6 |= RFD_FULL_MINUS_2K;
-	}
+	csr6 |= DMA_CONTROL_EFC;
+	csr6 |= RFA_FULL_MINUS_1K;
+	csr6 |= RFD_FULL_MINUS_2K;
+
 	return csr6;
 }
 
-
-void dwmac1000_dma_operation_mode( int iMacID, int txmode, int rxmode, int rxfifosz )
+void dwmac1000_dma_operation_mode( int iMacID, int txmode, int rxmode )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t csr6 = readl(ioaddr + DMA_CONTROL);
@@ -271,9 +275,11 @@ uint32_t csr6 = readl(ioaddr + DMA_CONTROL);
 	}
 
 	/* Configure flow control based on rx fifo size */
-	csr6 = dwmac1000_configure_fc(csr6, rxfifosz);
+	csr6 = dwmac1000_configure_fc(csr6);
 
 	writel(csr6, ioaddr + DMA_CONTROL);
+
+	writel(255, ioaddr + DMA_RX_WATCHDOG);
 }
 
 #if 0
@@ -324,12 +330,6 @@ static void dwmac1000_get_hw_feature(void __iomem *ioaddr,
 	dma_cap->enh_desc = (hw_cap & DMA_HW_FEAT_ENHDESSEL) >> 24;
 }
 
-static void dwmac1000_rx_watchdog(void __iomem *ioaddr, uint32_t riwt,
-				  uint32_t number_chan)
-{
-	writel(riwt, ioaddr + DMA_RX_WATCHDOG);
-}
-
 const struct stmmac_dma_ops dwmac1000_dma_ops = {
 	.reset = dwmac_dma_reset,
 	.init = dwmac1000_dma_init,
@@ -345,7 +345,6 @@ const struct stmmac_dma_ops dwmac1000_dma_ops = {
 	.stop_rx = dwmac_dma_stop_rx,
 	.dma_interrupt = dwmac_dma_interrupt,
 	.get_hw_feature = dwmac1000_get_hw_feature,
-	.rx_watchdog = dwmac1000_rx_watchdog,
 };
 
 #endif
@@ -355,6 +354,7 @@ void gmac_dma_transmit_poll( int iMacID )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 
+	/* Write any number to "Transmit Poll Demand". */
 	writel( 1, ioaddr + DMA_XMT_POLL_DEMAND );
 }
 
@@ -363,6 +363,7 @@ void gmac_dma_reception_poll( int iMacID )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 
+	/* Write any number to "Received Poll Demand". */
 	writel( 1, ioaddr + DMA_RCV_POLL_DEMAND );
 }
 
@@ -377,14 +378,6 @@ gmac_rx_descriptor_t *pxDMADescriptor;
 	return pxDMADescriptor;
 }
 
-void gmac_set_rx_table( int iMacID, gmac_rx_descriptor_t * pxDMATable )
-{
-uint8_t *ioaddr = ucFirstIOAddres( iMacID );
-
-	/* Set the RxDesc pointer with the first one of the pxDMATable list */
-	writel( ( uint32_t ) pxDMATable, ioaddr + DMA_RCV_BASE_ADDR );
-}
-
 gmac_tx_descriptor_t *gmac_get_tx_table( int iMacID )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
@@ -394,6 +387,14 @@ gmac_tx_descriptor_t *pxDMADescriptor;
 	pxDMADescriptor = ( gmac_tx_descriptor_t * )readl( ioaddr + DMA_TX_BASE_ADDR );
 
 	return pxDMADescriptor;
+}
+
+void gmac_set_rx_table( int iMacID, gmac_rx_descriptor_t * pxDMATable )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+
+	/* Set the RxDesc pointer with the first one of the pxDMATable list */
+	writel( ( uint32_t ) pxDMATable, ioaddr + DMA_RCV_BASE_ADDR );
 }
 
 void gmac_set_tx_table( int iMacID, gmac_tx_descriptor_t * pxDMATable )
@@ -414,10 +415,6 @@ uint32_t i = 0;
 gmac_tx_descriptor_t *pxDMADescriptor;
 
 	memset( pxDMATable, '\0', ulBufferCount * sizeof( *pxDMATable ) );
-
-	/* Set the TxDesc pointer with the first one of the pxDMATable list */
-
-	gmac_set_tx_table( iMacID, pxDMATable );
 
 	tx_table = gmac_get_tx_table( iMacID );
 
@@ -470,9 +467,6 @@ BaseType_t xReturn = 1;
 gmac_rx_descriptor_t *pxDMADescriptor;
 
 	memset( pxDMATable, '\0', ulBufferCount * sizeof( *pxDMATable ) );
-
-	/* Set the RxDesc pointer with the first one of the pxDMATable list */
-	gmac_set_rx_table( iMacID, pxDMATable );
 
 	rx_table = gmac_get_rx_table( iMacID );
 

@@ -69,15 +69,19 @@ uint32_t value;
 
 		if (hw->ps == SPEED_1000) {
 			value &= ~GMAC_CONTROL_PS;
+			//value |= GMAC_CONTROL_FES;
+			value &= ~GMAC_CONTROL_FES;
 		} else {
 			value |= GMAC_CONTROL_PS;
 
-			if (hw->ps == SPEED_10)
+//			if (hw->ps == SPEED_10)
 				value &= ~GMAC_CONTROL_FES;
-			else
-				value |= GMAC_CONTROL_FES;
+//			else
+//				value |= GMAC_CONTROL_FES;
 		}
 	}
+
+	value |= GMAC_CONTROL_DM;
 
 	writel(value, ioaddr + GMAC_CONTROL);
 
@@ -90,6 +94,10 @@ uint32_t value;
 		value &= ~GMAC_INT_DISABLE_PCS;
 
 	writel(value, ioaddr + GMAC_INT_MASK);
+
+	/* get flow-control same as Linux. */
+	value = 0xFFFF0008;
+	writel(value, ioaddr + GMAC_FLOW_CTRL);
 
 #ifdef STMMAC_VLAN_TAG_USED
 	/* Tag detection without filtering */
@@ -166,7 +174,7 @@ void dwmac1000_set_umac_addr(int iMacID,
 			    GMAC_ADDR_LOW(reg_n));
 }
 
-static void dwmac1000_set_eee_mode( int iMacID,
+static void dwmac1000_set_eee_mode( int iMacID, int status,
 				   bool en_tx_lpi_clockgating)
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
@@ -179,7 +187,12 @@ uint32_t value;
 	 * state.
 	 */
 	value = readl(ioaddr + LPI_CTRL_STATUS);
-	value |= LPI_CTRL_STATUS_LPIEN | LPI_CTRL_STATUS_LPITXA;
+	if( status )
+	{
+		value |= LPI_CTRL_STATUS_LPIEN | LPI_CTRL_STATUS_LPITXA;
+	} else {
+		value &= ~( LPI_CTRL_STATUS_LPIEN | LPI_CTRL_STATUS_LPITXA );
+	}
 	writel(value, ioaddr + LPI_CTRL_STATUS);
 }
 
@@ -401,7 +414,7 @@ uint32_t status;
 #define	STMMAC_CSR_150_250M	0x4	/* MDC = clk_scr_i/102 */
 #define	STMMAC_CSR_250_300M	0x5	/* MDC = clk_scr_i/122 */
 
-#define GMAC_MDIO_CLK_CSR			STMMAC_CSR_100_150M
+#define GMAC_MDIO_CLK_CSR			STMMAC_CSR_250_300M
 
 #define MII_BUSY		0x00000001
 #define MII_WRITE		0x00000002
@@ -529,8 +542,6 @@ volatile uint16_t ulLowerID, ulUpperID;
 
 ALT_SYSMGR_t *systemManager = ( ALT_SYSMGR_t * )ALT_SYSMGR_OFST;
 
-volatile uint32_t desc_copy[ sizeof( gmac_tx_descriptor_t ) / 4 ];
-
 void dwmac1000_sys_init( int iMacID )
 {
 EMACStats_t xStats;
@@ -587,7 +598,6 @@ int phyaddr, iIndex;
 		desc.own = 1;
 		desc.buf1_address = 0x000000ff;
 		desc.next_descriptor = 0x0000ff00;
-		memcpy( ( char * )desc_copy, &desc, sizeof desc_copy );
 	}
 
 	{
@@ -605,7 +615,7 @@ int phyaddr, iIndex;
 		 * requests = RD_OSR_LMT+1 */
 		xAXI.axi_rd_osr_lmt = 1;
 		/* When set to 1, this bit enables the LPI mode (Low Poer Idle) */
-		xAXI.axi_lpi_en = 1;
+		xAXI.axi_lpi_en = 0;
 
 		/*  1 KB Boundary Crossing Enable for the GMAC-AXI
 		 * Master When set, the GMAC-AXI Master performs
@@ -626,10 +636,10 @@ int phyaddr, iIndex;
 		struct stmmac_dma_cfg dma_cfg;
 		memset( &dma_cfg, '\0', sizeof dma_cfg );
 
-		dma_cfg.txpbl = 16;
-		dma_cfg.rxpbl = 16;
+		dma_cfg.txpbl = 8;
+		dma_cfg.rxpbl = 1;
 		dma_cfg.pblx8 = pdFALSE;
-		dma_cfg.fixed_burst = pdTRUE;	// false;
+		dma_cfg.fixed_burst = pdFALSE;
 		dma_cfg.mixed_burst = pdFALSE;
 		/* When this bit is set high and the FB bit is equal to 1,
 		the AHB or AXI interface generates all bursts aligned
@@ -638,8 +648,8 @@ int phyaddr, iIndex;
 		address) is not aligned, but subsequent bursts are
 		aligned to the address */
 		dma_cfg.aal = 0;
-		dwmac1000_dma_init( iMacID, &dma_cfg, pdFALSE /* atds */ );
-		dwmac1000_dma_operation_mode( iMacID, SF_DMA_MODE, SF_DMA_MODE, 1500 );
+		dwmac1000_dma_init( iMacID, &dma_cfg );
+		dwmac1000_dma_operation_mode( iMacID, SF_DMA_MODE, SF_DMA_MODE );
 	}
 	ulUsePHYAddress = 0;
 	for( phyaddr = 0; phyaddr < ARRAY_SIZE( phyIDs ); phyaddr++ )
@@ -680,7 +690,7 @@ int phyaddr, iIndex;
 	 * receive path and instruct the transmit to enter in LPI
 	 * state.
 	 */
-	dwmac1000_set_eee_mode( iMacID, pdTRUE );
+	dwmac1000_set_eee_mode( iMacID, pdFALSE, pdFALSE );
 
 	/* Program the timers in the LPI timer control register:
 	 * LS: minimum time (ms) for which the link
@@ -689,10 +699,10 @@ int phyaddr, iIndex;
 	 * TW: minimum time (us) for which the core waits
 	 *  after it has stopped transmitting the LPI pattern.
 	 */
-	dwmac1000_set_eee_timer( iMacID, 1000, 1000 );
+	dwmac1000_set_eee_timer( iMacID, 1000, 0 );
 
 	dwmac1000_set_eee_pls( iMacID, pdFALSE );
-	dwmac1000_set_eee_pls_enable( iMacID, pdTRUE );
+	dwmac1000_set_eee_pls_enable( iMacID, pdFALSE );
 
 	dwmac1000_ctrl_ane( iMacID, pdTRUE, pdFALSE, pdFALSE );
 

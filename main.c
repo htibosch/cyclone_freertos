@@ -162,7 +162,13 @@ static void prvCommandTask( void *pvParameters );
 application can define the array used as the FreeRTOS heap.  This is done so the
 heap can be forced into fast internal RAM - useful because the stacks used by
 the tasks come from this space. */
-uint8_t ucHeap[ configTOTAL_HEAP_SIZE ] __attribute__ ( ( section( ".oc_ram" ) ) );
+//uint8_t ucHeap[ configTOTAL_HEAP_SIZE ] __attribute__ ( ( section( ".oc_ram" ) ) );
+/* Allocate the memory for the heap. */
+#if( configAPPLICATION_ALLOCATED_HEAP == 1 )
+	/* The application writer has already defined the array used for the RTOS
+	heap - probably so it can be placed in a special segment or address. */
+	uint8_t __attribute__ ( ( aligned( 32 ) ) ) __attribute__ ((section (".ddr_sdram"))) ucHeap[ configTOTAL_HEAP_SIZE ];
+#endif
 
 /* FreeRTOS uses its own interrupt handler code.  This code cannot use the array
 of handlers defined by the Altera drivers because the array is declared static,
@@ -202,6 +208,8 @@ static TaskHandle_t xCommandTaskHandle = NULL;
 #define RECEIVE_TASK_STACK_SIZE		640
 #define RECEIVE_TASK_PRIORITY		2
 
+static void show_emac( void );
+void vShowTaskTable( BaseType_t aDoClear );
 /*-----------------------------------------------------------*/
 
 int main( void )
@@ -210,6 +218,9 @@ int main( void )
 	prvSetupHardware();
 
 	xSerialPortInitMinimal( 115200, 128 );
+
+	alt_globaltmr_init();
+	alt_globaltmr_start();
 
 	/* Initialise the network interface.
 
@@ -290,6 +301,17 @@ int main( void )
 					//FreeRTOS_setsockopt( xSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof( xReceiveTimeOut ) );
 				}
 				xCount = 0;// xTelnetRecv( &xTelnet, &xSourceAddress, cBuffer, sizeof( cBuffer ) - 1 );
+
+				if( xCount == 0 )
+				{
+				int rc;
+					rc = pcSerialReadLine( cBuffer, sizeof( cBuffer )-1 );
+					if( rc > 0 )
+					{
+						xCount = rc;
+					}
+				}
+
 				if( xCount == 0 )
 				{
 					xCount = FreeRTOS_recvfrom( xSocket, ( void * )cBuffer, sizeof( cBuffer )-1, FREERTOS_MSG_DONTWAIT,
@@ -319,11 +341,23 @@ int main( void )
 						{
 							verboseLevel = level;
 						}
-						lUDPLoggingPrintf( "Verbose level %d\n", verboseLevel );
+						//lUDPLoggingPrintf( "Verbose level %d\n", verboseLevel );
+						{
+						static uint64_t ullLast;
+						static uint32_t ulLast;
+						uint64_t ullNow;
+						uint32_t ulNow;
+							ullNow = ullGetHighResolutionTime();
+							ulNow = xTaskGetTickCount();;
+							lUDPLoggingPrintf( "Cyclone / Tick %6u %6u\n",
+								( uint32_t ) ( ( ullNow - ullLast ) / 1000ull ),
+								ulNow - ulLast );
+							ullLast = ullNow;
+							ulLast = ulNow;
+						}
 					}
 
 					#if( USE_IPERF != 0 )
-		
 					{
 						if( strncmp( cBuffer, "iperf", 5 ) == 0 )
 						{
@@ -331,6 +365,16 @@ int main( void )
 						}
 					}
 					#endif
+					if( strncmp( cBuffer, "list", 4 ) == 0 )
+					{
+						vShowTaskTable( cBuffer[ 4 ] == 'c' );
+					}
+					{
+						if( strncmp( cBuffer, "emac", 4 ) == 0 )
+						{
+							show_emac();
+						}
+					}
 
 					if( strncmp( cBuffer, "netstat", 7 ) == 0 )
 					{
@@ -787,3 +831,144 @@ void __cs3_isr_dabort( void )
 {
 	vAssertCalled( __FILE__, __LINE__ );
 }
+
+void vUDPLoggingHook( const char *pcMessage, BaseType_t xLength )
+{
+	void *pxPort = NULL;
+	vSerialPutString( pxPort, ( const char * )pcMessage, ( unsigned short ) xLength );
+}
+
+uint32_t *pulMAC_Config;
+
+#define EMAC_OFFSET		0x0000u
+#define DMA_OFFSET		0x1000u
+
+static void show_emac()
+{
+const int iMacID = 1;
+int index;
+uint32_t offset;
+
+	// ======================================================================
+
+	offset = EMAC_OFFSET;
+
+	pulMAC_Config = ( uint32_t * )( ucFirstIOAddres( iMacID ) + offset );
+
+	FreeRTOS_printf( ( "ST GMAC Registers\n" ) );
+	FreeRTOS_printf( ( "GMAC Registers at 0x%08X\n", ( uint32_t )pulMAC_Config ) );
+
+	for( index = 0; index < 55; index++ )
+	{
+	uint32_t value;
+
+		if( index >= 9 && index <= 11 ) {
+			value = 0;
+		} else {
+			value = pulMAC_Config[ index ];
+		}
+		FreeRTOS_printf( ( "Reg%d  0x%08X\n", index, value ) );
+		vTaskDelay( 60 );
+	}
+
+	// ======================================================================
+
+	offset = DMA_OFFSET;
+
+	pulMAC_Config = ( uint32_t * )( ucFirstIOAddres( iMacID ) + offset );
+
+	FreeRTOS_printf( ( "\n" ) );
+	FreeRTOS_printf( ( "DMA Registers at 0x%08X\n", ( uint32_t )pulMAC_Config ) );
+
+	for( index = 0; index < 22; index++ )
+	{
+	uint32_t value = pulMAC_Config[ index ];
+
+		FreeRTOS_printf( ( "Reg%d  0x%08X\n", index, value ) );
+		vTaskDelay( 60 );
+	}
+	// ======================================================================
+
+}
+
+static uint64_t ullHiresTime;
+
+extern uint32_t ulGetRunTimeCounterValue( void );
+
+extern uint32_t ulGetRunTimeCounterValue(void);
+extern void vStartRunTimeCounter(void)
+{
+}
+
+uint32_t ulGetRunTimeCounterValue( void )
+{
+	return ( uint32_t ) ( ullGetHighResolutionTime() - ullHiresTime );
+}
+
+extern BaseType_t xTaskClearCounters;
+void vShowTaskTable( BaseType_t aDoClear )
+{
+TaskStatus_t *pxTaskStatusArray;
+volatile UBaseType_t uxArraySize, x;
+uint64_t ullTotalRunTime;
+uint32_t ulStatsAsPermille;
+
+	// Take a snapshot of the number of tasks in case it changes while this
+	// function is executing.
+	uxArraySize = uxTaskGetNumberOfTasks();
+
+	// Allocate a TaskStatus_t structure for each task.  An array could be
+	// allocated statically at compile time.
+	pxTaskStatusArray = pvPortMalloc( uxArraySize * sizeof( TaskStatus_t ) );
+
+	FreeRTOS_printf( ( "Task name    Prio    Stack    Time(uS) Perc \n" ) );
+
+	if( pxTaskStatusArray != NULL )
+	{
+		// Generate raw status information about each task.
+		uint32_t ulDummy;
+		xTaskClearCounters = aDoClear;
+		uxArraySize = uxTaskGetSystemState( pxTaskStatusArray, uxArraySize, &ulDummy );
+
+		ullTotalRunTime = ullGetHighResolutionTime() - ullHiresTime;
+
+		// For percentage calculations.
+		ullTotalRunTime /= 1000UL;
+
+		// Avoid divide by zero errors.
+		if( ullTotalRunTime > 0ull )
+		{
+			// For each populated position in the pxTaskStatusArray array,
+			// format the raw data as human readable ASCII data
+			for( x = 0; x < uxArraySize; x++ )
+			{
+				// What percentage of the total run time has the task used?
+				// This will always be rounded down to the nearest integer.
+				// ulTotalRunTimeDiv100 has already been divided by 100.
+				ulStatsAsPermille = pxTaskStatusArray[ x ].ulRunTimeCounter / ullTotalRunTime;
+
+				FreeRTOS_printf( ( "%-14.14s %2lu %8u %8lu  %3lu.%lu %%\n",
+					pxTaskStatusArray[ x ].pcTaskName,
+					pxTaskStatusArray[ x ].uxCurrentPriority,
+					pxTaskStatusArray[ x ].usStackHighWaterMark,
+					pxTaskStatusArray[ x ].ulRunTimeCounter,
+					ulStatsAsPermille / 10,
+					ulStatsAsPermille % 10) );
+			}
+		}
+
+		// The array is no longer needed, free the memory it consumes.
+		vPortFree( pxTaskStatusArray );
+	}
+
+	FreeRTOS_printf( ( "Heap: min/cur/max: %lu %lu %lu\n",
+			( uint32_t )xPortGetMinimumEverFreeHeapSize(),
+			( uint32_t )xPortGetFreeHeapSize(),
+			configTOTAL_HEAP_SIZE) );
+	if( aDoClear != pdFALSE )
+	{
+//		ulListTime = xTaskGetTickCount();
+		ullHiresTime = ullGetHighResolutionTime();
+	}
+}
+/*-----------------------------------------------------------*/

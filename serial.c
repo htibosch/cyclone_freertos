@@ -74,6 +74,9 @@
 	simple UART drivers provided by Altera.
 */
 
+#include "stdio.h"
+#include "string.h"
+
 /* Scheduler includes. */
 #include "FreeRTOS.h"
 #include "task.h"
@@ -103,19 +106,21 @@ xComPortHandle xSerialPortInitMinimal( uint32_t ulWantedBaud, UBaseType_t uxQueu
 }
 /*-----------------------------------------------------------*/
 
-BaseType_t xSerialGetChar( xComPortHandle pxPort, signed char *pcRxedChar, TickType_t xBlockTime )
+BaseType_t xSerialGetChar( xComPortHandle pxPort, char *pcRxedChar, TickType_t xBlockTime )
 {
 BaseType_t xReturn;
+int rc;
 
 	/* Just call into the Altera support function, which has its own parameters,
 	so the parameters passed in here are not used. */
 	( void ) pxPort;
 	( void ) xBlockTime;
 
-	*pcRxedChar = uart0_getc();
+	rc = uart0_getc();
 
-	if( *pcRxedChar != -1 )
+	if( rc != -1 )
 	{
+		*pcRxedChar = ( char )rc;
 		xReturn = pdPASS;
 	}
 	else
@@ -127,7 +132,7 @@ BaseType_t xReturn;
 }
 /*-----------------------------------------------------------*/
 
-void vSerialPutString( xComPortHandle pxPort, const signed char * const pcString, unsigned short usStringLength )
+void vSerialPutString( xComPortHandle pxPort, const char * const pcString, BaseType_t usStringLength )
 {
 	/* Just call into the Altera support function, which has its own parameters,
 	so the parameters passed in here are not used. */
@@ -137,7 +142,7 @@ void vSerialPutString( xComPortHandle pxPort, const signed char * const pcString
 }
 /*-----------------------------------------------------------*/
 
-signed portBASE_TYPE xSerialPutChar( xComPortHandle pxPort, signed char cOutChar, TickType_t xBlockTime )
+signed portBASE_TYPE xSerialPutChar( xComPortHandle pxPort, char cOutChar, TickType_t xBlockTime )
 {
 char cOutBytes[ 2 ];
 
@@ -160,3 +165,49 @@ void vSerialClose(xComPortHandle xPort)
 }
 /*-----------------------------------------------------------*/
 
+BaseType_t pcSerialReadLine( char *pcBuffer, int aMaxLen )
+{
+static char pcStaticBuffer[ 128 ];
+static int iCurLength = 0;
+
+BaseType_t xReturnValue = 0;
+void *xHandle = NULL;
+BaseType_t x;
+
+	for( ;; )
+	{
+	char cRxedChar;
+
+		x = xSerialGetChar( xHandle, &cRxedChar, ( TickType_t ) 10 );
+		if( x != pdPASS )
+		{
+			// No character was received.
+			break;
+		}
+		if( cRxedChar == 10 )
+		{
+			if( iCurLength > 0 )
+			{
+				if( iCurLength > aMaxLen )
+				{
+					iCurLength = aMaxLen;
+				}
+				memcpy( pcBuffer, pcStaticBuffer, iCurLength );
+				xReturnValue = iCurLength;
+				iCurLength = 0;
+				break;
+			}
+		}
+		else if( cRxedChar < 32 || cRxedChar >= 128 )
+		{
+			// Invalid character
+		}
+		else if( iCurLength < aMaxLen )
+		{
+			pcStaticBuffer[ iCurLength ] = cRxedChar;
+			iCurLength++;
+		}
+	}
+
+	return xReturnValue;
+}

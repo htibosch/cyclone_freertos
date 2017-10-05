@@ -187,7 +187,7 @@ stack will revert to using the static IP address even when ipconfigUSE_DHCP is
 set to 1 if a valid configuration cannot be obtained from a DHCP server for any
 reason.  The static configuration used is that passed into the stack by the
 FreeRTOS_IPInit() function call. */
-#define ipconfigUSE_DHCP				1
+#define ipconfigUSE_DHCP				0
 #define ipconfigDHCP_REGISTER_HOSTNAME	1
 #define ipconfigDHCP_USES_UNICAST       1
 #define ipconfigUSE_DHCP_HOOK			1
@@ -248,7 +248,7 @@ to a pre-determinable value. */
 at a time - requires driver support. */
 #define ipconfigUSE_LINKED_RX_MESSAGES		( 1 )
 
-#define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS		( 32 )
+#define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS		( 40 )
 
 /* A FreeRTOS queue is used to send events from application tasks to the IP
 stack.  ipconfigEVENT_QUEUE_LENGTH sets the maximum number of events that can
