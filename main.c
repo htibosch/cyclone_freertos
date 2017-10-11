@@ -158,6 +158,9 @@ void vApplicationTickHook( void );
 
 static void prvCommandTask( void *pvParameters );
 
+#warning Take away
+void david_test(void);
+
 /* configAPPLICATION_ALLOCATED_HEAP is set to 1 in FreeRTOSConfig.h so the
 application can define the array used as the FreeRTOS heap.  This is done so the
 heap can be forced into fast internal RAM - useful because the stacks used by
@@ -204,6 +207,8 @@ int verboseLevel;
 
 /* Handle of the task that runs the FTP and HTTP servers. */
 static TaskHandle_t xCommandTaskHandle = NULL;
+
+static alt_freq_t ulMPUFrequency;
 
 #define RECEIVE_TASK_STACK_SIZE		640
 #define RECEIVE_TASK_PRIORITY		2
@@ -356,7 +361,16 @@ int main( void )
 							ulLast = ulNow;
 						}
 					}
-
+					if( strncmp( cBuffer, "freq", 4 ) == 0 )
+					{
+					alt_freq_t ulCurFreq;
+						alt_clk_freq_get( ALT_CLK_MPU_PERIPH, &ulCurFreq );
+						lUDPLoggingPrintf( "MPU freq %lu Mhz ( now %lu MHz )\n", ulMPUFrequency / 1000000ul, ulCurFreq / 1000000ul );
+					}
+					if( strncmp( cBuffer, "david", 5 ) == 0 )
+					{
+						david_test();
+					}
 					#if( USE_IPERF != 0 )
 					{
 						if( strncmp( cBuffer, "iperf", 5 ) == 0 )
@@ -410,13 +424,90 @@ const uint32_t ulVBit = 13U;
 	__asm( "MCR p15, 0, %0, c12, c0, 0" : : "r" ( ulVectorTable ) );
 
 	cache_init();
-	mmu_init();
+//	mmu_init();
 
 	/* GPIO for LEDs.  ParTest is a historic name which used to stand for
 	parallel port test. */
 	vParTestInitialise();
 }
 
+/*-----------------------------------------------------------*/
+
+void vConfigureTickInterrupt( void )
+{
+const alt_freq_t ulMicroSecondsPerSecond = 1000000UL;
+void FreeRTOS_Tick_Handler( void );
+
+	/* Interrupts are disabled when this function is called. */
+
+	/* Initialise the general purpose timer modules. */
+	alt_gpt_all_tmr_init();
+
+	/* ALT_CLK_MPU_PERIPH = mpu_periph_clk */
+	alt_clk_freq_get( ALT_CLK_MPU_PERIPH, &ulMPUFrequency );
+
+	/* Use the local private timer. */
+	alt_gpt_counter_set( ALT_GPT_CPU_PRIVATE_TMR, ulMPUFrequency / configTICK_RATE_HZ );
+
+	/* Sanity check. */
+	configASSERT( alt_gpt_time_microsecs_get( ALT_GPT_CPU_PRIVATE_TMR ) == ( ulMicroSecondsPerSecond / configTICK_RATE_HZ ) );
+
+	/* Set to periodic mode. */
+	alt_gpt_mode_set( ALT_GPT_CPU_PRIVATE_TMR, ALT_GPT_RESTART_MODE_PERIODIC );
+
+	/* The timer can be started here as interrupts are disabled. */
+	alt_gpt_tmr_start( ALT_GPT_CPU_PRIVATE_TMR );
+
+	/* Register the standard FreeRTOS Cortex-A tick handler as the timer's
+	interrupt handler.  The handler clears the interrupt using the
+	configCLEAR_TICK_INTERRUPT() macro, which is defined in FreeRTOSConfig.h. */
+	vRegisterIRQHandler( ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE, ( alt_int_callback_t ) FreeRTOS_Tick_Handler, NULL );
+
+	/* This tick interrupt must run at the lowest priority. */
+	alt_int_dist_priority_set( ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE, portLOWEST_USABLE_INTERRUPT_PRIORITY << portPRIORITY_SHIFT );
+
+	/* Ensure the interrupt is forwarded to the CPU. */
+	alt_int_dist_enable( ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE );
+
+	/* Finally, enable the interrupt. */
+	alt_gpt_int_clear_pending( ALT_GPT_CPU_PRIVATE_TMR );
+	alt_gpt_int_enable( ALT_GPT_CPU_PRIVATE_TMR );
+
+}
+/*-----------------------------------------------------------*/
+
+void vRegisterIRQHandler( uint32_t ulID, alt_int_callback_t pxHandlerFunction, void *pvContext )
+{
+	if( ulID < ALT_INT_PROVISION_INT_COUNT )
+	{
+		xISRHandlers[ ulID ].pxISR = pxHandlerFunction;
+		xISRHandlers[ ulID ].pvContext = pvContext;
+	}
+}
+/*-----------------------------------------------------------*/
+
+void vApplicationIRQHandler( uint32_t ulICCIAR )
+{
+uint32_t ulInterruptID;
+void *pvContext;
+alt_int_callback_t pxISR;
+
+	/* Re-enable interrupts. */
+	__asm ( "cpsie i" );
+
+	/* The ID of the interrupt is obtained by bitwise anding the ICCIAR value
+	with 0x3FF. */
+	ulInterruptID = ulICCIAR & 0x3FFUL;
+
+	if( ulInterruptID < ALT_INT_PROVISION_INT_COUNT )
+	{
+		/* Call the function installed in the array of installed handler
+		functions. */
+		pxISR = xISRHandlers[ ulInterruptID ].pxISR;
+		pvContext = xISRHandlers[ ulInterruptID ].pvContext;
+		pxISR( ulICCIAR, pvContext );
+	}
+}
 /*-----------------------------------------------------------*/
 
 /* Called by FreeRTOS+TCP when the network connects or disconnects.  Disconnect
@@ -659,83 +750,6 @@ void vApplicationTickHook( void )
 }
 /*-----------------------------------------------------------*/
 
-void vConfigureTickInterrupt( void )
-{
-alt_freq_t ulTempFrequency;
-const alt_freq_t ulMicroSecondsPerSecond = 1000000UL;
-void FreeRTOS_Tick_Handler( void );
-
-	/* Interrupts are disabled when this function is called. */
-
-	/* Initialise the general purpose timer modules. */
-	alt_gpt_all_tmr_init();
-
-	/* ALT_CLK_MPU_PERIPH = mpu_periph_clk */
-	alt_clk_freq_get( ALT_CLK_MPU_PERIPH, &ulTempFrequency );
-
-	/* Use the local private timer. */
-	alt_gpt_counter_set( ALT_GPT_CPU_PRIVATE_TMR, ulTempFrequency / configTICK_RATE_HZ );
-
-	/* Sanity check. */
-	configASSERT( alt_gpt_time_microsecs_get( ALT_GPT_CPU_PRIVATE_TMR ) == ( ulMicroSecondsPerSecond / configTICK_RATE_HZ ) );
-
-	/* Set to periodic mode. */
-	alt_gpt_mode_set( ALT_GPT_CPU_PRIVATE_TMR, ALT_GPT_RESTART_MODE_PERIODIC );
-
-	/* The timer can be started here as interrupts are disabled. */
-	alt_gpt_tmr_start( ALT_GPT_CPU_PRIVATE_TMR );
-
-	/* Register the standard FreeRTOS Cortex-A tick handler as the timer's
-	interrupt handler.  The handler clears the interrupt using the
-	configCLEAR_TICK_INTERRUPT() macro, which is defined in FreeRTOSConfig.h. */
-	vRegisterIRQHandler( ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE, ( alt_int_callback_t ) FreeRTOS_Tick_Handler, NULL );
-
-	/* This tick interrupt must run at the lowest priority. */
-	alt_int_dist_priority_set( ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE, portLOWEST_USABLE_INTERRUPT_PRIORITY << portPRIORITY_SHIFT );
-
-	/* Ensure the interrupt is forwarded to the CPU. */
-	alt_int_dist_enable( ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE );
-
-	/* Finally, enable the interrupt. */
-	alt_gpt_int_clear_pending( ALT_GPT_CPU_PRIVATE_TMR );
-	alt_gpt_int_enable( ALT_GPT_CPU_PRIVATE_TMR );
-
-}
-/*-----------------------------------------------------------*/
-
-void vRegisterIRQHandler( uint32_t ulID, alt_int_callback_t pxHandlerFunction, void *pvContext )
-{
-	if( ulID < ALT_INT_PROVISION_INT_COUNT )
-	{
-		xISRHandlers[ ulID ].pxISR = pxHandlerFunction;
-		xISRHandlers[ ulID ].pvContext = pvContext;
-	}
-}
-/*-----------------------------------------------------------*/
-
-void vApplicationIRQHandler( uint32_t ulICCIAR )
-{
-uint32_t ulInterruptID;
-void *pvContext;
-alt_int_callback_t pxISR;
-
-	/* Re-enable interrupts. */
-	__asm ( "cpsie i" );
-
-	/* The ID of the interrupt is obtained by bitwise anding the ICCIAR value
-	with 0x3FF. */
-	ulInterruptID = ulICCIAR & 0x3FFUL;
-
-	if( ulInterruptID < ALT_INT_PROVISION_INT_COUNT )
-	{
-		/* Call the function installed in the array of installed handler
-		functions. */
-		pxISR = xISRHandlers[ ulInterruptID ].pxISR;
-		pvContext = xISRHandlers[ ulInterruptID ].pvContext;
-		pxISR( ulICCIAR, pvContext );
-	}
-}
-
 extern void vOutputChar( const char cChar, const TickType_t xTicksToWait  );
 void vOutputChar( const char cChar, const TickType_t xTicksToWait  )
 {
@@ -972,3 +986,85 @@ uint32_t ulStatsAsPermille;
 	}
 }
 /*-----------------------------------------------------------*/
+
+#define ipMAC_ADDR_LENGTH_BYTES   6
+
+struct MAC_PACKED
+{
+	uint8_t ucBytes[ ipMAC_ADDR_LENGTH_BYTES ];
+} __attribute__( (packed) );
+
+struct MAC_PACKED_ARRAY
+{
+	struct MAC_PACKED mac1, mac2, mac3;
+	uint32_t start;
+};
+
+struct MAC_PACKED_ARRAY_PACKED
+{
+	struct MAC_PACKED mac1, mac2, mac3;
+	uint32_t start;
+} __attribute__( (packed) );
+
+struct MAC_NORMAL
+{
+	uint8_t ucBytes[ ipMAC_ADDR_LENGTH_BYTES ];
+};
+
+struct MAC_PACKET_NORMAL
+{
+	struct MAC_NORMAL mac1, mac2, mac3;
+	uint32_t start;
+};
+
+struct MAC_PACKET_NORMAL_PACKED
+{
+	struct MAC_NORMAL mac1, mac2, mac3;
+	uint32_t start;
+} __attribute__( (packed) );
+
+
+struct MAC_PACKED				s1;
+struct MAC_PACKED_ARRAY			s2;
+struct MAC_PACKED_ARRAY_PACKED	s3;
+struct MAC_NORMAL				s4;
+struct MAC_PACKET_NORMAL		s5;
+struct MAC_PACKET_NORMAL_PACKED	s6;
+
+static const struct MAC_PACKED broadcastAddr = { { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } };
+#define logPrintf	lUDPLoggingPrintf
+static void showMac(const uint8_t *pucBytes)
+{
+	logPrintf("MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
+		pucBytes[0],
+		pucBytes[1],
+		pucBytes[2],
+		pucBytes[3],
+		pucBytes[4],
+		pucBytes[5]);
+}
+void david_test(void)
+{
+	logPrintf("MAC packed struct sizes: %lu %lu %lu\n",	
+		sizeof s1,
+		sizeof s2,
+		sizeof s3);
+	logPrintf("MAC normal struct sizes: %lu %lu %lu\n",	
+		sizeof s4,
+		sizeof s5,
+		sizeof s6);
+	memcpy (s2.mac1.ucBytes, broadcastAddr.ucBytes, ipMAC_ADDR_LENGTH_BYTES);
+	memcpy (s2.mac2.ucBytes, broadcastAddr.ucBytes, ipMAC_ADDR_LENGTH_BYTES);
+	memcpy (s2.mac3.ucBytes, broadcastAddr.ucBytes, ipMAC_ADDR_LENGTH_BYTES);
+	showMac(s2.mac1.ucBytes);
+	showMac(s2.mac2.ucBytes);
+	showMac(s2.mac3.ucBytes);
+
+	memcpy (s5.mac1.ucBytes, broadcastAddr.ucBytes, ipMAC_ADDR_LENGTH_BYTES);
+	memcpy (s5.mac2.ucBytes, broadcastAddr.ucBytes, ipMAC_ADDR_LENGTH_BYTES);
+	memcpy (s5.mac3.ucBytes, broadcastAddr.ucBytes, ipMAC_ADDR_LENGTH_BYTES);
+	showMac(s5.mac1.ucBytes);
+	showMac(s5.mac2.ucBytes);
+	showMac(s5.mac3.ucBytes);
+}
+

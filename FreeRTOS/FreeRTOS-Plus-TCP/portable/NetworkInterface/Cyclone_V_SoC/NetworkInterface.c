@@ -169,10 +169,17 @@ __attribute__ ( ( aligned( 64 ) ) ) __attribute__ ((section (".ram"))) gmac_rx_d
 static gmac_tx_descriptor_t *pxNextTxDesc = txDescriptors;
 static gmac_tx_descriptor_t *DMATxDescToClear = txDescriptors;
 
+static gmac_rx_descriptor_t *pxNextRxDesc = rxDescriptors;
+
 /* xTXDescriptorSemaphore is a counting semaphore with
 a maximum count of GMAC_TX_BUFFERS, which is the number of
 DMA TX descriptors. */
 static SemaphoreHandle_t xTXDescriptorSemaphore = NULL;
+
+/*
+ * Check if a given packet should be accepted.
+ */
+static BaseType_t xMayAcceptPacket( uint8_t *pcBuffer );
 
 /*-----------------------------------------------------------*/
 
@@ -306,6 +313,28 @@ if( dma_status_reg->ulValue ) {}
 }
 /*-----------------------------------------------------------*/
 
+static void vWaitTxDone(void);
+static void vWaitTxDone()
+{
+int iCount;
+	/* Temporary function, will be removed. */
+	for( iCount = 10; iCount; iCount-- )
+	{
+		if( ( uxSemaphoreGetCount( xTXDescriptorSemaphore ) < GMAC_TX_BUFFERS ) &&
+			( DMATxDescToClear->own == 0 ) )
+		{
+			/* This will be done from within an ISR ( transmission done ). */
+			ulISREvents |= EMAC_IF_TX_EVENT;
+			if( xEMACTaskHandle != NULL )
+			{
+				xTaskNotifyGive( xEMACTaskHandle );
+			}
+			break;
+		}
+		vTaskDelay( 2 );
+	}
+}
+
 BaseType_t xNetworkInterfaceOutput( NetworkBufferDescriptor_t * const pxDescriptor, BaseType_t bReleaseAfterSend )
 {
 BaseType_t xReturn = pdFAIL;
@@ -397,7 +426,7 @@ const TickType_t xBlockTimeTicks = pdMS_TO_TICKS( 50u );
 				pxDmaTxDesc->buf1_byte_count = ulTransmitSize;
 				/* Set Own bit of the Tx descriptor Status: gives the buffer back to ETHERNET DMA */
 				pxDmaTxDesc->own = 1;
-memcpy( desc_copy, pxDmaTxDesc, sizeof desc_copy );
+//memcpy( desc_copy, pxDmaTxDesc, sizeof desc_copy );
 				/* Point to next descriptor */
 				pxNextTxDesc = ( gmac_tx_descriptor_t * ) ( pxNextTxDesc->next_descriptor );
 				/* Ensure completion of memory access */
@@ -410,6 +439,8 @@ alt_cache_l2_sync();
 
 				iptraceNETWORK_INTERFACE_TRANSMIT();
 				xReturn = pdPASS;
+				/* Temporary function, will be removed. */
+				vWaitTxDone();
 			}
 		}
 		else
@@ -507,8 +538,285 @@ BaseType_t xReturn;
 }
 /*-----------------------------------------------------------*/
 
-void gmac_check_rx( EMACInterface_t *pxEMACif )
+static BaseType_t xMayAcceptPacket( uint8_t *pcBuffer )
 {
+const ProtocolPacket_t *pxProtPacket = ( const ProtocolPacket_t * )pcBuffer;
+
+	switch( pxProtPacket->xTCPPacket.xEthernetHeader.usFrameType )
+	{
+	case ipARP_FRAME_TYPE:
+		/* Check it later. */
+		return pdTRUE;
+	case ipIPv4_FRAME_TYPE:
+		/* Check it here. */
+		break;
+	default:
+		/* Refuse the packet. */
+		return pdFALSE;
+	}
+
+	#if( ipconfigETHERNET_DRIVER_FILTERS_PACKETS == 1 )
+	{
+		const IPHeader_t *pxIPHeader = &(pxProtPacket->xTCPPacket.xIPHeader);
+		uint32_t ulDestinationIPAddress;
+
+		/* Ensure that the incoming packet is not fragmented (only outgoing packets
+		 * can be fragmented) as these are the only handled IP frames currently. */
+		if( ( pxIPHeader->usFragmentOffset & FreeRTOS_ntohs( ipFRAGMENT_OFFSET_BIT_MASK ) ) != 0U )
+		{
+			return pdFALSE;
+		}
+		/* HT: Might want to make the following configurable because
+		 * most IP messages have a standard length of 20 bytes */
+
+		/* 0x45 means: IPv4 with an IP header of 5 x 4 = 20 bytes
+		 * 0x47 means: IPv4 with an IP header of 7 x 4 = 28 bytes */
+		if( pxIPHeader->ucVersionHeaderLength < 0x45 || pxIPHeader->ucVersionHeaderLength > 0x4F )
+		{
+			return pdFALSE;
+		}
+
+		ulDestinationIPAddress = pxIPHeader->ulDestinationIPAddress;
+		/* Is the packet for this node? */
+		if( ( ulDestinationIPAddress != *ipLOCAL_IP_ADDRESS_POINTER ) &&
+			/* Is it a broadcast address x.x.x.255 ? */
+			( ( FreeRTOS_ntohl( ulDestinationIPAddress ) & 0xff ) != 0xff ) &&
+		#if( ipconfigUSE_LLMNR == 1 )
+			( ulDestinationIPAddress != ipLLMNR_IP_ADDR ) &&
+		#endif
+			( *ipLOCAL_IP_ADDRESS_POINTER != 0 ) ) {
+			FreeRTOS_printf( ( "Drop IP %lxip\n", FreeRTOS_ntohl( ulDestinationIPAddress ) ) );
+			return pdFALSE;
+		}
+
+		if( pxIPHeader->ucProtocol == ipPROTOCOL_UDP )
+		{
+			uint16_t port = pxProtPacket->xUDPPacket.xUDPHeader.usDestinationPort;
+
+			if( ( xPortHasUDPSocket( port ) == pdFALSE )
+			#if ipconfigUSE_LLMNR == 1
+				&& ( port != FreeRTOS_ntohs( ipLLMNR_PORT ) )
+			#endif
+			#if ipconfigUSE_NBNS == 1
+				&& ( port != FreeRTOS_ntohs( ipNBNS_PORT ) )
+			#endif
+			#if ipconfigUSE_DNS == 1
+				&& ( pxProtPacket->xUDPPacket.xUDPHeader.usSourcePort != FreeRTOS_ntohs( ipDNS_PORT ) )
+			#endif
+				) {
+				/* Drop this packet, not for this device. */
+				return pdFALSE;
+			}
+		}
+	}
+	#endif	/* ipconfigETHERNET_DRIVER_FILTERS_PACKETS */
+	return pdTRUE;
+}
+/*-----------------------------------------------------------*/
+
+struct xFrameInfo
+{
+	gmac_rx_descriptor_t *FSRxDesc;          /*!< First Segment Rx Desc */
+	gmac_rx_descriptor_t *LSRxDesc;          /*!< Last Segment Rx Desc */
+	uint32_t  SegCount;                    /*!< Segment count */
+	uint32_t length;                       /*!< Frame length */
+	uint32_t buffer;                       /*!< Frame buffer */
+};
+typedef struct xFrameInfo FrameInfo_t;
+
+static BaseType_t xGetReceivedFrame( FrameInfo_t *pxFrame );
+
+static BaseType_t xGetReceivedFrame( FrameInfo_t *pxFrame )
+{
+uint32_t ulCounter = 0;
+gmac_rx_descriptor_t *pxDescriptor = pxNextRxDesc;
+BaseType_t xResult = -1;
+
+	/* Scan descriptors owned by CPU */
+	while( ( pxDescriptor->own == 0u ) && ( ulCounter < GMAC_RX_BUFFERS ) )
+	{
+		/* Just for security. */
+		ulCounter++;
+
+		if( pxDescriptor->last_descriptor == 0u )
+		{
+			if( pxDescriptor->first_descriptor != 0u )
+			{
+				/* First segment in frame, but not the last. */
+				pxFrame->FSRxDesc = pxDescriptor;
+				pxFrame->LSRxDesc = ( gmac_rx_descriptor_t *)NULL;
+				pxFrame->SegCount = 1;
+			}
+			else
+			{
+				/* This is an intermediate segment, not first, not last. */
+				/* Increment segment count. */
+				pxFrame->SegCount++;
+			}
+			/* Point to next descriptor. */
+			pxDescriptor = (gmac_rx_descriptor_t*) (pxDescriptor->next_descriptor);
+			pxNextRxDesc = pxDescriptor;
+		}
+		/* Must be a last segment */
+		else
+		{
+			if( pxDescriptor->first_descriptor != 0u )
+			{
+				pxFrame->SegCount = 0;
+				/* Remember the first segment. */
+				pxFrame->FSRxDesc = pxDescriptor;
+			}
+
+			/* Increment segment count */
+			pxFrame->SegCount++;
+
+			/* Remember the last segment. */
+			pxFrame->LSRxDesc = pxDescriptor;
+
+			/* Get the Frame Length of the received packet: substruct 4 bytes of the CRC */
+			pxFrame->length = pxDescriptor->buf1_byte_count;
+
+			/* Get the address of the buffer start address */
+			pxFrame->buffer = pxDescriptor->buf1_address;
+
+			/* Point to next descriptor */
+			pxNextRxDesc = ( gmac_rx_descriptor_t * ) pxDescriptor->next_descriptor;
+
+			/* Return OK status: a packet was received. */
+			xResult = pxFrame->length;
+			break;
+		}
+	}
+
+	/* Return function status */
+	return xResult;
+}
+
+void gmac_check_rx()
+{
+FrameInfo_t frameInfo;
+BaseType_t xReceivedLength, xAccepted;
+xIPStackEvent_t xRxEvent = { eNetworkRxEvent, NULL };
+const TickType_t xDescriptorWaitTime = pdMS_TO_TICKS( 250 );
+uint8_t *pucBuffer;
+gmac_rx_descriptor_t *pxRxDescriptor;
+NetworkBufferDescriptor_t *pxCurNetworkBuffer;
+NetworkBufferDescriptor_t *pxNewNetworkBuffer = NULL;
+
+	xReceivedLength = xGetReceivedFrame( &frameInfo );
+
+	if( xReceivedLength > 0 )
+	{
+		pucBuffer = (uint8_t *) frameInfo.buffer;
+
+		/* Update the ETHERNET DMA global Rx descriptor with next Rx descriptor */
+		/* Chained Mode */    
+		/* Selects the next DMA Rx descriptor list for next buffer to read */ 
+		pxRxDescriptor = ( gmac_rx_descriptor_t* )frameInfo.FSRxDesc;
+
+		/* In order to make the code easier and faster, only packets in a single buffer
+		will be accepted.  This can be done by making the buffers large enough to
+		hold a complete Ethernet packet (1536 bytes).
+		Therefore, two sanity checks: */
+		configASSERT( xReceivedLength <= ETH_RX_BUF_SIZE );
+
+		if( pxRxDescriptor->error_summary != 0u )
+		{
+			/* Not an Ethernet frame-type or a checmsum error. */
+			xAccepted = pdFALSE;
+		}
+		else
+		{
+			/* See if this packet must be handled. */
+			xAccepted = xMayAcceptPacket( pucBuffer );
+		}
+
+		if( xAccepted != pdFALSE )
+		{
+			/* The packet wil be accepted, but check first if a new Network Buffer can
+			be obtained. If not, the packet will still be dropped. */
+			pxNewNetworkBuffer = pxGetNetworkBufferWithDescriptor( ETH_RX_BUF_SIZE, xDescriptorWaitTime );
+
+			if( pxNewNetworkBuffer == NULL )
+			{
+				/* A new descriptor can not be allocated now. This packet will be dropped. */
+				xAccepted = pdFALSE;
+			}
+		}
+		#if( ipconfigZERO_COPY_RX_DRIVER != 0 )
+		{
+			/* Find out which Network Buffer was originally passed to the descriptor. */
+			pxCurNetworkBuffer = pxPacketBuffer_to_NetworkBuffer( pucBuffer );
+			configASSERT( pxCurNetworkBuffer != NULL );
+		}
+		#else
+		{
+			/* In this mode, the two descriptors are the same. */
+			pxCurNetworkBuffer = pxNewNetworkBuffer;
+			if( pxNewNetworkBuffer != NULL )
+			{
+				/* The packet is acepted and a new Network Buffer was created,
+				copy data to the Network Bufffer. */
+				memcpy( pxNewNetworkBuffer->pucEthernetBuffer, pucBuffer, xReceivedLength );
+			}
+		}
+		#endif
+
+		if( xAccepted != pdFALSE )
+		{
+			pxCurNetworkBuffer->xDataLength = xReceivedLength;
+			xRxEvent.pvData = ( void * ) pxCurNetworkBuffer;
+
+			/* Pass the data to the TCP/IP task for processing. */
+			if( xSendEventStructToIPTask( &xRxEvent, xDescriptorWaitTime ) == pdFALSE )
+			{
+				/* Could not send the descriptor into the TCP/IP stack, it
+				must be released. */
+				vReleaseNetworkBufferAndDescriptor( pxCurNetworkBuffer );
+				iptraceETHERNET_RX_EVENT_LOST();
+			}
+			else
+			{
+				iptraceNETWORK_INTERFACE_RECEIVE();
+			}
+		}
+
+		/* Set Buffer1 address pointer */
+		if( pxNewNetworkBuffer != NULL )
+		{
+			pxRxDescriptor->buf1_address = (uint32_t)pxNewNetworkBuffer->pucEthernetBuffer;
+		}
+		else
+		{
+			/* The packet was dropped and the same Network
+			Buffer will be used to receive a new packet. */
+		}
+
+		pxRxDescriptor->desc0 = 0u;
+		/* Set Buffer1 size and Second Address Chained bit */
+		pxRxDescriptor->buf1_byte_count = ETH_RX_BUF_SIZE;
+		pxRxDescriptor->second_address_chained = pdTRUE;
+		pxRxDescriptor->own = pdTRUE;
+
+		/* Ensure completion of memory access */
+		__DSB();
+
+		/* Resume DMA reception. */
+		gmac_dma_start_rx( iMacID, 0 );
+
+//		/* When Rx Buffer unavailable flag is set clear it and resume
+//		reception. */
+//		if( ( xETH.Instance->DMASR & ETH_DMASR_RBUS ) != 0 )
+//		{
+//			/* Clear RBUS ETHERNET DMA flag. */
+//			xETH.Instance->DMASR = ETH_DMASR_RBUS;
+//
+//			/* Resume DMA reception. */
+//			xETH.Instance->DMARPDR = 0;
+//		}
+	}
+
+	return ( xReceivedLength > 0 );
 }
 /*-----------------------------------------------------------*/
 
@@ -573,10 +881,22 @@ uint32_t ulStatus;
 			ulTaskNotifyTake( pdFALSE, ulMaxBlockTime );
 		}
 
+
+		if( ( uxSemaphoreGetCount( xTXDescriptorSemaphore ) < GMAC_TX_BUFFERS ) &&
+			( DMATxDescToClear->own == 0 ) )
+		{
+			/* This will be done from within an ISR ( transmission done ). */
+			ulISREvents |= EMAC_IF_TX_EVENT;
+		}
+		if( pxNextRxDesc->own == 0 )
+		{
+			ulISREvents |= EMAC_IF_RX_EVENT;
+		}
+
 		if( ( ulISREvents & EMAC_IF_RX_EVENT ) != 0 )
 		{
 			ulISREvents &= ~EMAC_IF_RX_EVENT;
-			gmac_check_rx( &xEMACif );
+			gmac_check_rx();
 		}
 
 		if( ( ulISREvents & EMAC_IF_TX_EVENT ) != 0 )

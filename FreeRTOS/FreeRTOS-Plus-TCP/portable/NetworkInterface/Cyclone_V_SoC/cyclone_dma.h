@@ -177,95 +177,128 @@ enum ttc_control {
 
 struct gmac_tx_descriptor
 {
-	uint32_t
-		deferred_bit : 1,			/*  0 */
-		underflow_error : 1,        /*  1 */
-		excessive_deferral : 1,     /*  2 */
-		collision_count : 4,        /*  3 */
-		vlan_frame : 1,             /*  7 */
-		excessive_collision : 1,    /*  8 */
-		late_collision : 1,         /*  9 */
-		no_carrier : 1,             /* 10 */
-		loss_of_carrier : 1,        /* 11 */
-		IP_payload_error : 1,       /* 12 */
-		frame_flushed : 1,          /* 13 */
-		jabber_timeout : 1,         /* 14 */
-		error_summary : 1,          /* 15 */
-		ip_header_error : 1,        /* 16 */
-		transmit_stamp_status : 1,	/* 17 This field is used as a status bit to indicate
-									      that a timestamp was captured for the described transmit frame */
-		reserved_2 : 2,				/* 18 */
-		second_address_chained : 1,	/* 20 When set, this bit indicates that the second address
-									      in the descriptor is the Next descriptor
-									      address rather than the second buffer address */
-		transmit_end_of_ting : 1,	/* 21 When set, this bit indicates that the descriptor list
-									      reached its final descriptor */
-		checksum_mode : 2,			/* 22 0x0 : none. 0x1: IP-header, 2: IP & payload, 3: complete */
-		reserved_1 : 1,				/* 24 */
-		timestamp_enable : 1		/* 25 */,
-		disable_pad : 1,			/* 26 When set, the MAC does not add padding to a frame shorter than 64 bytes. */
-		disable_crc : 1,			/* 27 */
-		first_segment : 1,			/* 28 */
-		last_segment : 1,			/* 29 */
-		int_on_completion : 1,		/* 30 */
-		own : 1;					/* 31 */
-	uint32_t
-		buf1_byte_count : 13,
-		res1 : 3,
-		buf2_byte_count : 13,
-		res2 : 3;
-	uint32_t
-		buf1_address;
-	uint32_t
-		next_descriptor;
-	#if ( USE_ATDS != 0 )
-		uint32_t reserved_32_1;
-		uint32_t reserved_32_2;
-		uint32_t time_stamp_low;
-		uint32_t time_stamp_high;
-	#endif
+	union {
+		struct {
+			uint32_t
+				deferred_bit : 1,			/*  0 */
+				underflow_error : 1,        /*  1 */
+				excessive_deferral : 1,     /*  2 */
+				collision_count : 4,        /*  3 */
+				vlan_frame : 1,             /*  7 */
+				excessive_collision : 1,    /*  8 */
+				late_collision : 1,         /*  9 */
+				no_carrier : 1,             /* 10 */
+				loss_of_carrier : 1,        /* 11 */
+				IP_payload_error : 1,       /* 12 */
+				frame_flushed : 1,          /* 13 */
+				jabber_timeout : 1,         /* 14 */
+				error_summary : 1,          /* 15 */
+				ip_header_error : 1,        /* 16 */
+				transmit_stamp_status : 1,	/* 17 This field is used as a status bit to indicate
+												  that a timestamp was captured for the described transmit frame */
+				reserved_2 : 2,				/* 18 */
+				second_address_chained : 1,	/* 20 When set, this bit indicates that the second address
+												  in the descriptor is the Next descriptor
+												  address rather than the second buffer address */
+				transmit_end_of_ring : 1,	/* 21 When set, this bit indicates that the descriptor list
+												  reached its final descriptor */
+				checksum_mode : 2,			/* 22 0x0 : none. 0x1: IP-header, 2: IP & payload, 3: complete */
+				reserved_1 : 1,				/* 24 */
+				timestamp_enable : 1		/* 25 */,
+				disable_padding : 1,		/* 26 When set, the MAC does not add padding to a frame shorter than 64 bytes. */
+				disable_crc : 1,			/* 27 */
+				first_segment : 1,			/* 28 */
+				last_segment : 1,			/* 29 */
+				int_on_completion : 1,		/* 30 */
+				own : 1;					/* 31 */
+			uint32_t
+				buf1_byte_count : 13,
+				res1 : 3,
+				buf2_byte_count : 13,
+				res2 : 3;
+			uint32_t
+				buf1_address;
+			uint32_t
+				next_descriptor;
+			#if ( USE_ATDS != 0 )
+				uint32_t reserved_32_1;
+				uint32_t reserved_32_2;
+				uint32_t time_stamp_low;
+				uint32_t time_stamp_high;
+			#endif
+		};
+		struct {
+			uint32_t desc0;
+			uint32_t desc1;
+			uint32_t desc2;
+			uint32_t desc3;
+		#if ( USE_ATDS != 0 )
+			uint32_t desc4;
+			uint32_t desc5;
+			uint32_t desc6;
+			uint32_t desc7;
+		#endif
+		};
+	};
 };
 
 struct gmac_rx_descriptor
 {
-	uint32_t
-		ext_status_available : 1,	/*  0 */
-		crc_error : 1,				/*  1 */
-		dribble_bit_error : 1,		/*  2 */
-		receive_error : 1,			/*  3 */
-		recv_wdt_timeout : 1,		/*  4 */
-		frame_type : 1,				/*  5 */
-		late_collision : 1,			/*  6 */
-		time_stamp_available : 1,	/*  7 */
-		last_descriptor : 1,		/*  8 */
-		first_descriptor : 1,		/*  9 */
-		vlan_tag : 1,				/* 10 */
-		overflow_error : 1,			/* 11 */
-		length_error : 1,			/* 12 */
-		source_addr_filter_fail : 1,/* 13 Source Address Filter Fail */
-		description_error : 1,		/* 14 */
-		error_summary : 1,			/* 15 */
-		frame_length : 14,			/* 16 */
-		dest_addr_filter_fail : 1,	/* 30 Destination Address Filter Fail */
-		own : 1;					/* 31 */
-	uint32_t
-		buf1_byte_count : 13,		/*  0  RBS1: Receive Buffer 1 Size */
-		res1 : 1,					/* 13 */
-		second_address_chained : 1,	/* 14  RCH: Second Address Chained */
-		receive_end_of_ring : 1,	/* 15  RER: Receive End of Ring */
-		buf2_byte_count : 13,		/* 16 */
-		res2 : 2,					/* 29 */
-		disable_int_on_compl : 1;	/* 31  DIC: Disable Interrupt on Completion */
-	uint32_t
-		buf1_address;
-	uint32_t
-		next_descriptor;
-	#if ( USE_ATDS != 0 )
-		uint32_t reserved_32_1;
-		uint32_t reserved_32_2;
-		uint32_t time_stamp_low;
-		uint32_t time_stamp_high;
-	#endif
+	union {
+		struct {
+			uint32_t
+				ext_status_available : 1,	/*  0 */
+				crc_error : 1,				/*  1 */
+				dribble_bit_error : 1,		/*  2 */
+				receive_error : 1,			/*  3 */
+				recv_wdt_timeout : 1,		/*  4 */
+				frame_type : 1,				/*  5 */
+				late_collision : 1,			/*  6 */
+				time_stamp_available : 1,	/*  7 */
+				last_descriptor : 1,		/*  8 */
+				first_descriptor : 1,		/*  9 */
+				vlan_tag : 1,				/* 10 */
+				overflow_error : 1,			/* 11 */
+				length_error : 1,			/* 12 */
+				source_addr_filter_fail : 1,/* 13 Source Address Filter Fail */
+				description_error : 1,		/* 14 */
+				error_summary : 1,			/* 15 */
+				frame_length : 14,			/* 16 */
+				dest_addr_filter_fail : 1,	/* 30 Destination Address Filter Fail */
+				own : 1;					/* 31 */
+			uint32_t
+				buf1_byte_count : 13,		/*  0  RBS1: Receive Buffer 1 Size */
+				res1 : 1,					/* 13 */
+				second_address_chained : 1,	/* 14  RCH: Second Address Chained */
+				receive_end_of_ring : 1,	/* 15  RER: Receive End of Ring */
+				buf2_byte_count : 13,		/* 16 */
+				res2 : 2,					/* 29 */
+				disable_int_on_compl : 1;	/* 31  DIC: Disable Interrupt on Completion */
+			uint32_t
+				buf1_address;
+			uint32_t
+				next_descriptor;
+			#if ( USE_ATDS != 0 )
+				uint32_t reserved_32_1;
+				uint32_t reserved_32_2;
+				uint32_t time_stamp_low;
+				uint32_t time_stamp_high;
+			#endif
+		};
+
+		struct {
+			uint32_t desc0;
+			uint32_t desc1;
+			uint32_t desc2;
+			uint32_t desc3;
+		#if ( USE_ATDS != 0 )
+			uint32_t desc4;
+			uint32_t desc5;
+			uint32_t desc6;
+			uint32_t desc7;
+		#endif
+		};
+	};
 };
 
 typedef struct gmac_tx_descriptor gmac_tx_descriptor_t;
