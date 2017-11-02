@@ -96,6 +96,7 @@
 #include "cache_support.h"
 
 #include "serial.h"
+#include "alt_16550_uart.h"
 
 #include "cyclone_dma.h"
 #include "cyclone_emac.h"
@@ -111,6 +112,10 @@
 #include "hr_gettime.h"
 
 #include "UDPLoggingPrintf.h"
+
+#if( USE_IPERF != 0 )
+	#include "iperf_task.h"
+#endif
 
 /* mainCREATE_SIMPLE_BLINKY_DEMO_ONLY is used to select between two demo
  * applications, as described at the top of this file.
@@ -150,13 +155,13 @@ static void prvSetupHardware( void );
 /* Prototypes for the standard FreeRTOS callback/hook functions implemented
 within this file. */
 void vApplicationMallocFailedHook( void );
-void vApplicationIdleHook( void );
 void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName );
 void vApplicationTickHook( void );
 
 /*-----------------------------------------------------------*/
 
 static void prvCommandTask( void *pvParameters );
+static BaseType_t xTasksAlreadyCreated = pdFALSE;
 
 #warning Take away
 void david_test(void);
@@ -213,6 +218,9 @@ static alt_freq_t ulMPUFrequency;
 #define RECEIVE_TASK_STACK_SIZE		640
 #define RECEIVE_TASK_PRIORITY		2
 
+#warning just debugging
+volatile uint32_t int_count[ 5 ];
+
 static void show_emac( void );
 void vShowTaskTable( BaseType_t aDoClear );
 /*-----------------------------------------------------------*/
@@ -235,6 +243,7 @@ int main( void )
 	are used if ipconfigUSE_DHCP is set to 0, or if ipconfigUSE_DHCP is set to 1
 	but a DHCP server cannot be	contacted. */
 
+//#warning Re-enable
 	FreeRTOS_IPInit( ucIPAddress, ucNetMask, ucGatewayAddress, ucDNSServerAddress, ucMACAddress );
 
 	xTaskCreate( prvCommandTask, "Command", mainCOMMAND_TASK_STACK_SIZE, NULL, mainCOMMAND_TASK_PRIORITY, &xCommandTaskHandle );
@@ -257,6 +266,14 @@ int main( void )
 }
 /*-----------------------------------------------------------*/
 
+	extern ALT_16550_HANDLE_t g_uart0_handle;	// See uart0_support.c
+
+extern BaseType_t xPlusTCPStarted;
+	void UartHandler( uint32_t ulICCIAR, void * pvContext )
+	{
+	}
+	extern void emac_show_buffers( void );
+
 	static void prvCommandTask( void *pvParameters )
 	{
 		xSocket_t xSocket;
@@ -270,33 +287,35 @@ int main( void )
 
 		/* Wait until the network is up before creating the servers.  The
 		notification is given from the network event hook. */
+//#warning Enable this ulTaskNotifyTake again
 		ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
 
 		/* The priority of this task can be raised now the disk has been
 		initialised. */
 		vTaskPrioritySet( NULL, mainCOMMAND_TASK_PRIORITY );
 
+		alt_int_dist_enable( ALT_INT_INTERRUPT_UART0 );
+		vRegisterIRQHandler( ALT_INT_INTERRUPT_UART0, UartHandler, NULL );
+		alt_int_dist_priority_set( ALT_INT_INTERRUPT_UART0, portLOWEST_USABLE_INTERRUPT_PRIORITY << portPRIORITY_SHIFT );
+
+		alt_16550_fifo_enable(&g_uart0_handle);
+		alt_16550_int_enable_rx(&g_uart0_handle);
+		alt_16550_int_enable_tx(&g_uart0_handle);
+
 //		xTelnetCreate( &xTelnet, 23 );
 
 		for( ;; )
 		{
 		TickType_t xReceiveTimeOut = pdMS_TO_TICKS( 200 );
+		BaseType_t xCount;
+		struct freertos_sockaddr xSourceAddress;
+		socklen_t xSourceAddressLength = sizeof( xSourceAddress );
 
 			xSemaphoreTake( xServerSemaphore, xReceiveTimeOut );
 
 			xSocket = xLoggingGetSocket();
-
-			if( xSocket == NULL)
 			{
-				vTaskDelay( 100 );
-			}
-			else
-			{
-			BaseType_t xCount;
-			struct freertos_sockaddr xSourceAddress;
-			socklen_t xSourceAddressLength = sizeof( xSourceAddress );
-
-				if( xHadSocket == pdFALSE )
+				if( ( xSocket != NULL ) && ( xHadSocket == pdFALSE ) && ( xTasksAlreadyCreated ) )
 				{
 					xHadSocket = pdTRUE;
 					FreeRTOS_printf( ( "prvCommandTask started\n" ) );
@@ -313,14 +332,19 @@ int main( void )
 					rc = pcSerialReadLine( cBuffer, sizeof( cBuffer )-1 );
 					if( rc > 0 )
 					{
+						eventLogAdd("Serial INPUT %d", rc);
 						xCount = rc;
 					}
 				}
 
-				if( xCount == 0 )
+				if( ( xSocket != NULL ) && ( xCount == 0 ) )
 				{
 					xCount = FreeRTOS_recvfrom( xSocket, ( void * )cBuffer, sizeof( cBuffer )-1, FREERTOS_MSG_DONTWAIT,
 						&xSourceAddress, &xSourceAddressLength );
+					if( xCount > 0 )
+					{
+						eventLogAdd("Ether INPUT %d", xCount);
+					}
 				}
 
 				if( ( xCount >= 3 ) && ( xCount <= 5 ) && ( cBuffer[ 0 ] == 0x1b ) && ( cBuffer[ 1 ] == 0x5b ) && ( cBuffer[ 2 ] == 0x41 ) )
@@ -346,20 +370,32 @@ int main( void )
 						{
 							verboseLevel = level;
 						}
-						//lUDPLoggingPrintf( "Verbose level %d\n", verboseLevel );
+						lUDPLoggingPrintf( "Verbose level %d\n", verboseLevel );
+					}
+					if( strncmp( cBuffer, "clock", 5 ) == 0 )
+					{
+					static uint64_t ullLast;
+					static uint32_t ulLast;
+					uint64_t ullNow;
+					uint32_t ulNow;
+						/* The high-resolution timer seems to be reliable.
+						The FreeRTOS clock tick seems to tick quite irregularly. */
+						ullNow = ullGetHighResolutionTime();
+						ulNow = xTaskGetTickCount();;
+						lUDPLoggingPrintf( "Cyclone / Tick %6u %6u\n",
+							( uint32_t ) ( ( ullNow - ullLast ) / 1000ull ),
+							ulNow - ulLast );
+						ullLast = ullNow;
+						ulLast = ulNow;
+					}
+					if( strncmp( cBuffer, "led", 3 ) == 0 )
+					{
+					UBaseType_t ledNr = 0;
+						if( ( sscanf( cBuffer+3, "%lu", &ledNr ) > 0 ) && ( ledNr < 4 ) )
 						{
-						static uint64_t ullLast;
-						static uint32_t ulLast;
-						uint64_t ullNow;
-						uint32_t ulNow;
-							ullNow = ullGetHighResolutionTime();
-							ulNow = xTaskGetTickCount();;
-							lUDPLoggingPrintf( "Cyclone / Tick %6u %6u\n",
-								( uint32_t ) ( ( ullNow - ullLast ) / 1000ull ),
-								ulNow - ulLast );
-							ullLast = ullNow;
-							ulLast = ulNow;
+							vParTestToggleLED( ledNr );
 						}
+						lUDPLoggingPrintf( "LED toggle %lu\n", ledNr );
 					}
 					if( strncmp( cBuffer, "freq", 4 ) == 0 )
 					{
@@ -367,6 +403,27 @@ int main( void )
 						alt_clk_freq_get( ALT_CLK_MPU_PERIPH, &ulCurFreq );
 						lUDPLoggingPrintf( "MPU freq %lu Mhz ( now %lu MHz )\n", ulMPUFrequency / 1000000ul, ulCurFreq / 1000000ul );
 					}
+					if( strncmp( cBuffer, "ints", 4 ) == 0 )
+					{
+						lUDPLoggingPrintf( "int_count[] = %5u %5u %5u %5u %5u\n",
+								int_count[0],
+								int_count[1],
+								int_count[2],
+								int_count[3],
+								int_count[4]);
+					}
+					if( strncmp( cBuffer, "emac", 4 ) == 0 )
+					{
+						emac_show_buffers();
+					}
+					#if( USE_IPERF != 0 )
+					{
+						if( strncmp( cBuffer, "iperf", 5 ) == 0 )
+						{
+							vIPerfInstall();
+						}
+					}
+					#endif
 					if( strncmp( cBuffer, "david", 5 ) == 0 )
 					{
 						david_test();
@@ -384,10 +441,10 @@ int main( void )
 						vShowTaskTable( cBuffer[ 4 ] == 'c' );
 					}
 					{
-						if( strncmp( cBuffer, "emac", 4 ) == 0 )
-						{
-							show_emac();
-						}
+//						if( strncmp( cBuffer, "emac", 4 ) == 0 )
+//						{
+//							show_emac();
+//						}
 					}
 
 					if( strncmp( cBuffer, "netstat", 7 ) == 0 )
@@ -423,8 +480,11 @@ const uint32_t ulVBit = 13U;
 	__asm( "MCR p15, 0, %0, c1, c0, 0" : : "r" ( ulSCTLR ) );
 	__asm( "MCR p15, 0, %0, c12, c0, 0" : : "r" ( ulVectorTable ) );
 
+	// Try this
+	alt_int_global_enable_all();
+
 	cache_init();
-//	mmu_init();
+	mmu_init();
 
 	/* GPIO for LEDs.  ParTest is a historic name which used to stand for
 	parallel port test. */
@@ -491,7 +551,7 @@ void vApplicationIRQHandler( uint32_t ulICCIAR )
 uint32_t ulInterruptID;
 void *pvContext;
 alt_int_callback_t pxISR;
-
+int IRQ_Ok = pdFALSE;
 	/* Re-enable interrupts. */
 	__asm ( "cpsie i" );
 
@@ -499,7 +559,28 @@ alt_int_callback_t pxISR;
 	with 0x3FF. */
 	ulInterruptID = ulICCIAR & 0x3FFUL;
 
-	if( ulInterruptID < ALT_INT_PROVISION_INT_COUNT )
+	switch( ulInterruptID )
+	{
+	case ALT_INT_INTERRUPT_EMAC1_IRQ:
+		int_count[0]++;
+		IRQ_Ok = pdTRUE;
+		break;
+	case ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE:
+		int_count[1]++;
+		IRQ_Ok = pdTRUE;
+		break;
+	case 0x3FFUL:
+		int_count[2]++;
+		break;
+	case ALT_INT_INTERRUPT_RAM_ECC_CORRECTED_IRQ:
+		int_count[3]++;
+		break;
+	default:
+		int_count[4]++;
+		break;
+	}
+
+	if( IRQ_Ok != pdFALSE )
 	{
 		/* Call the function installed in the array of installed handler
 		functions. */
@@ -517,7 +598,6 @@ events are only received if implemented in the MAC driver. */
 events are only received if implemented in the MAC driver. */
 void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
 {
-static BaseType_t xTasksAlreadyCreated = pdFALSE;
 
 	/* If the network has just come up...*/
 	if( eNetworkEvent == eNetworkUp )
@@ -556,6 +636,7 @@ static BaseType_t xTasksAlreadyCreated = pdFALSE;
 			vUDPLoggingTaskCreate();
 
 			xTasksAlreadyCreated = pdTRUE;
+			xPlusTCPStarted = pdTRUE;
 		}
 
 		{
@@ -688,24 +769,6 @@ BaseType_t xReturn;
 	}
 
 	return xReturn;
-}
-/*-----------------------------------------------------------*/
-
-void vApplicationIdleHook( void )
-{
-volatile size_t xFreeHeapSpace;
-
-	/* This is just a trivial example of an idle hook.  It is called on each
-	cycle of the idle task.  It must *NOT* attempt to block.  In this case the
-	idle task just queries the amount of FreeRTOS heap that remains.  See the
-	memory management section on the http://www.FreeRTOS.org web site for memory
-	management options.  If there is a lot of heap memory free then the
-	configTOTAL_HEAP_SIZE value in FreeRTOSConfig.h can be reduced to free up
-	RAM. */
-	xFreeHeapSpace = xPortGetFreeHeapSize();
-
-	/* Remove compiler warning about xFreeHeapSpace being set but never used. */
-	( void ) xFreeHeapSpace;
 }
 /*-----------------------------------------------------------*/
 
@@ -935,7 +998,7 @@ uint32_t ulStatsAsPermille;
 	// allocated statically at compile time.
 	pxTaskStatusArray = pvPortMalloc( uxArraySize * sizeof( TaskStatus_t ) );
 
-	FreeRTOS_printf( ( "Task name    Prio    Stack    Time(uS) Perc \n" ) );
+	FreeRTOS_printf( ( "Task name    Prio    Stack  Switches   Time(mS)    Avg(uS) Perc \n" ) );
 
 	if( pxTaskStatusArray != NULL )
 	{
@@ -956,16 +1019,31 @@ uint32_t ulStatsAsPermille;
 			// format the raw data as human readable ASCII data
 			for( x = 0; x < uxArraySize; x++ )
 			{
+			uint32_t avg_time = 0;
+			if( pxTaskStatusArray[ x ].ulSwitchCounter != 0u )
+			{
+				avg_time = pxTaskStatusArray[ x ].ulRunTimeCounter / pxTaskStatusArray[ x ].ulSwitchCounter;
+			}
 				// What percentage of the total run time has the task used?
 				// This will always be rounded down to the nearest integer.
 				// ulTotalRunTimeDiv100 has already been divided by 100.
 				ulStatsAsPermille = pxTaskStatusArray[ x ].ulRunTimeCounter / ullTotalRunTime;
-
-				FreeRTOS_printf( ( "%-14.14s %2lu %8u %8lu  %3lu.%lu %%\n",
+/*
+Task name    Prio    Stack    Switches Time(mS)    Perc 
+Command         1      862          32 3007.650   17.3 %
+IDLE            0      116          53 9620.438   55.4 %
+IP-task         5      825          29 2007.052   11.5 %
+LogTask         2      349          18  942.456    5.4 %
+EMAC            6      505          23 1787.474   10.2 %
+*/
+				FreeRTOS_printf( ( "%-14.14s %2lu %8u %9lu %6lu.%03lu %8lu %3lu.%lu %%\n",
 					pxTaskStatusArray[ x ].pcTaskName,
 					pxTaskStatusArray[ x ].uxCurrentPriority,
 					pxTaskStatusArray[ x ].usStackHighWaterMark,
-					pxTaskStatusArray[ x ].ulRunTimeCounter,
+					pxTaskStatusArray[ x ].ulSwitchCounter,
+					pxTaskStatusArray[ x ].ulRunTimeCounter / 1000u,
+					pxTaskStatusArray[ x ].ulRunTimeCounter % 1000u,
+					avg_time,
 					ulStatsAsPermille / 10,
 					ulStatsAsPermille % 10) );
 			}
@@ -1066,5 +1144,68 @@ void david_test(void)
 	showMac(s5.mac1.ucBytes);
 	showMac(s5.mac2.ucBytes);
 	showMac(s5.mac3.ucBytes);
+}
+
+/*
+static void socfpga_cyclone5_restart(enum reboot_mode mode, const char *cmd)
+{
+	u32 temp;
+
+	temp = readl(rst_manager_base_addr + SOCFPGA_RSTMGR_CTRL);
+
+	if (mode == REBOOT_HARD)
+		temp |= RSTMGR_CTRL_SWCOLDRSTREQ;
+	else
+		temp |= RSTMGR_CTRL_SWWARMRSTREQ;
+	writel(temp, rst_manager_base_addr + SOCFPGA_RSTMGR_CTRL);
+}
+*/
+
+/*
+S:0x00100020 : DCD      0x00100040	// __cs3_reset
+S:0x00100024 : DCD      0x001002B4	// __cs3_isr_undef
+S:0x00100028 : DCD      0x00102F60	// __cs3_isr_swi ( FreeRTOS_SWI_Handler )
+S:0x0010002C : DCD      0x001002B8	// __cs3_isr_pabort
+S:0x00100030 : DCD      0x001002BC	// __cs3_isr_dabort
+S:0x00100034 : DCD      0x001002B0	// __cs3_isr_interrupt
+S:0x00100038 : DCD      0x00103070	// __cs3_isr_irq ( FreeRTOS_IRQ_Handler )
+S:0x0010003C : DCD      0x001002C0	// __cs3_isr_fiq
+*/
+
+//void __cs3_reset()
+//{
+//	vAssertCalled( __FILE__, __LINE__ );
+//}
+
+void __cs3_isr_undef()
+{
+	vAssertCalled( __FILE__, __LINE__ );
+}
+
+extern int unknown_function(void);
+void __cs3_isr_pabort()
+{
+	vAssertCalled( __FILE__, __LINE__ );
+}
+
+//void __cs3_isr_dabort()
+//{
+//	vAssertCalled( __FILE__, __LINE__ );
+//}
+
+void __cs3_isr_interrupt()
+{
+	vAssertCalled( __FILE__, __LINE__ );
+}
+
+void __cs3_isr_fiq()
+{
+	vAssertCalled( __FILE__, __LINE__ );
+}
+
+char *getTaskName(void);
+char *getTaskName()
+{
+	return pcTaskGetName( ( TaskHandle_t ) NULL );
 }
 

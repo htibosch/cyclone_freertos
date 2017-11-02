@@ -89,8 +89,25 @@
 
 /*-----------------------------------------------------------*/
 
-const uint32_t ulLEDs[ partstNUM_LEDS ] = { ALT_GPIO_BIT12, ALT_GPIO_BIT13, ALT_GPIO_BIT14, ALT_GPIO_BIT15 };
-const uint32_t ulAllLEDs =                  ALT_GPIO_BIT12| ALT_GPIO_BIT13| ALT_GPIO_BIT14| ALT_GPIO_BIT15;
+/* Board DE-10 :
+
+FPGA LED's :
+
+	PIN_W15
+	PIN_AA24
+	PIN_V16
+	PIN_V15
+	PIN_AF26
+	PIN_AE26
+	PIN_Y16
+	PIN_AA23
+
+HPS LED:
+	PORTB : 24 ( PIO 56 )
+
+*/
+const uint32_t ulLEDs[ partstNUM_LEDS ] = { ALT_GPIO_BIT12, ALT_GPIO_BIT13, ALT_GPIO_BIT14, ALT_GPIO_BIT24 /*ALT_GPIO_BIT15*/ };
+const uint32_t ulAllLEDs =                  ALT_GPIO_BIT12| ALT_GPIO_BIT13| ALT_GPIO_BIT14| ALT_GPIO_BIT24 /*ALT_GPIO_BIT15*/;
 const uint32_t *pulPortBData = ALT_GPIO1_SWPORTA_DR_ADDR;
 static uint32_t ulPortValue;
 
@@ -104,6 +121,16 @@ void vParTestInitialise( void )
 	ulPortValue = ulAllLEDs;
 }
 /*-----------------------------------------------------------*/
+
+void vSetLED( BaseType_t xValue )
+{
+	vParTestSetLED( 3, xValue );
+}
+
+void vToggleLED( unsigned portBASE_TYPE uxLED )
+{
+	vParTestToggleLED( 3 );;
+}
 
 void vParTestSetLED( UBaseType_t uxLED, BaseType_t xValue )
 {

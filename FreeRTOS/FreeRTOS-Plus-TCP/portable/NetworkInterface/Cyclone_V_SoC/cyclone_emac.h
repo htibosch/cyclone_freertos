@@ -41,6 +41,15 @@
 #define GMAC_DEBUG		0x00000024	/* GMAC debug register */
 #define GMAC_WAKEUP_FILTER	0x00000028	/* Wake-up Frame Filter */
 
+#define GMAC_INT_STATUS		0x00000038	/* interrupt status register */
+#define GMAC_INT_STATUS_PMT	BIT(3)
+#define GMAC_INT_STATUS_MMCIS	BIT(4)
+#define GMAC_INT_STATUS_MMCRIS	BIT(5)
+#define GMAC_INT_STATUS_MMCTIS	BIT(6)
+#define GMAC_INT_STATUS_MMCCSUM	BIT(7)
+#define GMAC_INT_STATUS_TSTAMP	BIT(9)
+#define GMAC_INT_STATUS_LPIIS	BIT(10)
+
 #define GMAC_CORE_INIT (GMAC_CONTROL_JD | GMAC_CONTROL_PS | GMAC_CONTROL_ACS | \
 			GMAC_CONTROL_BE | GMAC_CONTROL_DCRS)
 
@@ -201,8 +210,8 @@ typedef struct xEMACStats EMACStats_t;
 struct xEMACDeviceInfo
 {
 	uint32_t ps;
-	uint32_t pmt;
-	uint32_t pcs;
+//	uint32_t pmt;
+//	uint32_t pcs;
 };
 
 typedef struct xEMACDeviceInfo EMACDeviceInfo_t;
@@ -236,8 +245,25 @@ struct xEMAC_config {
 		reserved_2      : 4;			/* 28  */
 };
 
-
 typedef struct xEMAC_config EMAC_config_t;
+
+struct xEMAC_interrupt {
+	uint32_t
+		rgsmiiis : 1,	/*  0  Link change */
+		pcslchgis : 1,	/*  1  AN status */
+		pcsancis : 1,	/*  2  AN complete */
+		resrv_1 : 1,	/*  3  Reserved. */
+		mmcis : 1,		/*  4  set high when any of the Bits [7:5] is set high. */
+		mmcrxis : 1,	/*  5  MMC Receive Interrupt Status. */
+		mmctxis : 1,	/*  6  MMC Transmit Interrupt. */
+		mmcrxipis : 1,	/*  7  MMC Receive Checksum Offload Interrupt. */
+		resrv_2 : 1,	/*  8  Reserved. */
+		tsis : 1,		/*  9  Timestamp Interrupt Status */
+		lpiis : 1,		/* 10  LPI Interrupt Status */
+		resrv_3 : 21;	/* 11  Reserved. */
+};
+
+typedef struct xEMAC_interrupt EMAC_interrupt_t;
 
 #define SYSMGR_EMACGRP_CTRL_PHYSEL_ENUM_GMII_MII 0x0
 #define SYSMGR_EMACGRP_CTRL_PHYSEL_ENUM_RGMII 0x1
@@ -263,6 +289,9 @@ void dwmac1000_core_init(int iMacID, EMACDeviceInfo_t *hw, int mtu);
 
 /* Enable disable MAC RX/TX */
 void gmac_enable_transmission(int iMacID, bool enable);
+
+void gmac_set_emac_interrupt_enable( int iMacID, uint32_t ulMask );
+uint32_t gmac_get_emac_interrupt_status( int iMacID, int iClear );
 
 static __inline uint8_t *ucFirstIOAddres(int iMacID)
 {

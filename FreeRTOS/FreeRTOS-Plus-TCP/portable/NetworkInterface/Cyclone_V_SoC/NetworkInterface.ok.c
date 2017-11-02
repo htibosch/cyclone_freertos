@@ -226,7 +226,7 @@ size_t uxCount = ( ( UBaseType_t ) GMAC_TX_BUFFERS ) - uxSemaphoreGetCount( xTXD
 					vReleaseNetworkBufferAndDescriptor( pxNetworkBuffer ) ;
 				}
 				DMATxDescToClear->buf1_address = ( uint32_t )0u;
-eventLogAdd("TX Clear %d", (int)(DMATxDescToClear - txDescriptors));			}
+			}
 		}
 		#endif /* ipconfigZERO_COPY_TX_DRIVER */
 
@@ -373,54 +373,30 @@ volatile unsigned emac_rx_count = 0;
 volatile unsigned emac_tx_count = 0;
 void vEMACInterrupthandler( uint32_t ulICCIAR, void * pvContext )
 {
-static uint32_t ulLastDMAStatus;
 uint32_t ulDMAStatus;
 //uint32_t ulEMACStatus;
 
 	/* Get DMA interrupt status and clear all bits. */
 //	ulEMACStatus = gmac_get_emac_interrupt_status( iMacID, pdTRUE );
-	ulDMAStatus  = gmac_get_dma_interrupt_status( iMacID, pdFALSE );
+	ulDMAStatus  = gmac_get_dma_interrupt_status( iMacID, pdTRUE );
 //#define DMA_STATUS_RI           0x00000040	/* Receive Interrupt */
 //#define DMA_STATUS_TI           0x00000001	/* Transmit Interrupt */
 
-#define RX_MASK		( DMA_STATUS_RI | DMA_STATUS_RU | DMA_STATUS_OVF )
-#define TX_MASK		( DMA_STATUS_TI | DMA_STATUS_TU | DMA_STATUS_TPS )
-
 	emac_check_count++;
-	if( ( ( ulDMAStatus & RX_MASK ) == 0 ) && ( pxNextRxDesc != NULL ) && ( pxNextRxDesc->own == 0 ) )
+	if( ( ulDMAStatus & ( DMA_STATUS_RI | DMA_STATUS_RU | DMA_STATUS_OVF ) ) != 0 )
 	{
-eventLogAdd("RX_EVENT own=0" );
-		ulDMAStatus |= DMA_STATUS_RI;
-	}
-	if( ( ulDMAStatus & RX_MASK ) != 0 )
-	{
-eventLogAdd("RX_EVENT %02X", ulDMAStatus & RX_MASK );
 		emac_rx_count++;
 		ulISREvents |= EMAC_IF_RX_EVENT;
 	}
-	if( ( ulDMAStatus & TX_MASK ) != 0 )
+	if( ( ulDMAStatus & ( DMA_STATUS_TI | DMA_STATUS_TU | DMA_STATUS_TPS ) ) != 0 )
 	{
-eventLogAdd("TX_EVENT %02X", ulDMAStatus & TX_MASK );
 		emac_tx_count++;
 		ulISREvents |= EMAC_IF_TX_EVENT;
 	}
-
 	if( ( ulISREvents != 0 ) && ( xEMACTaskHandle != NULL ) )
 	{
 		xTaskNotifyGive( xEMACTaskHandle );
 //		vTaskNotifyGiveFromISR( xEMACTaskHandle, &xHigherPriorityTaskWoken );
-	}
-	if( ulDMAStatus & ( TX_MASK | RX_MASK ) )
-	{
-		gmac_clear_dma_interrupt_status( iMacID, ulDMAStatus & ( TX_MASK | RX_MASK ) );
-	}
-	if( ulLastDMAStatus != ulDMAStatus )
-	{
-		if( ulISREvents == 0ul )
-		{
-			eventLogAdd("TX_RX == %02X", ulDMAStatus & ( TX_MASK | RX_MASK ) );
-		}
-		ulLastDMAStatus = ulDMAStatus;
 	}
 }
 
@@ -431,17 +407,8 @@ eventLogAdd("TX_EVENT %02X", ulDMAStatus & TX_MASK );
 	extern void vApplicationIdleHook( void );
 	void vApplicationIdleHook()
 	{
-		if( xPlusTCPStarted )
-		{
-//		static uint64_t ullLastTime = 0ull;
-//		uint64_t ullNow = ullGetHighResolutionTime();
-//		uint32_t ullDiff = ullNow - ullLastTime;
-
-//			if( ullDiff >= 100ul )
-			{
-				vEMACInterrupthandler( ALT_INT_INTERRUPT_EMAC1_IRQ, ( void *)&xEMACif );
-			}
-//			ullLastTime = ullNow;
+		if (xPlusTCPStarted) {
+			vEMACInterrupthandler( ALT_INT_INTERRUPT_EMAC1_IRQ, ( void *)&xEMACif );
 		}
 	}
 #endif
@@ -474,7 +441,7 @@ BaseType_t xReturn = pdFAIL;
 uint32_t ulTransmitSize = 0;
 gmac_tx_descriptor_t *pxDmaTxDesc;
 /* Do not wait too long for a free TX DMA buffer. */
-const TickType_t xBlockTimeTicks = pdMS_TO_TICKS( 200u );
+const TickType_t xBlockTimeTicks = pdMS_TO_TICKS( 50u );
 
 	#if( ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM != 0 )
 	{
@@ -502,11 +469,6 @@ const TickType_t xBlockTimeTicks = pdMS_TO_TICKS( 200u );
 	{
 		if( xGetPhyLinkStatus() != 0 )
 		{
-			if( uxQueueMessagesWaiting( xTXDescriptorSemaphore ) == 0 )
-			{
-				ulISREvents |= EMAC_IF_TX_EVENT;
-				xTaskNotifyGive( xEMACTaskHandle );
-			}
 			if( xSemaphoreTake( xTXDescriptorSemaphore, xBlockTimeTicks ) != pdPASS )
 			{
 				/* Time-out waiting for a free TX descriptor. */
@@ -564,7 +526,6 @@ const TickType_t xBlockTimeTicks = pdMS_TO_TICKS( 200u );
 				pxDmaTxDesc->buf1_byte_count = ulTransmitSize;
 				/* Set Own bit of the Tx descriptor Status: gives the buffer back to ETHERNET DMA */
 				pxDmaTxDesc->own = 1;
-eventLogAdd("TX Send  %d", (int)(pxDmaTxDesc - txDescriptors));
 //memcpy( desc_copy, pxDmaTxDesc, sizeof desc_copy );
 				/* Point to next descriptor */
 				pxNextTxDesc = ( gmac_tx_descriptor_t * ) ( pxNextTxDesc->next_descriptor );
@@ -925,7 +886,6 @@ NetworkBufferDescriptor_t *pxNewNetworkBuffer = NULL;
 		if( pxNewNetworkBuffer != NULL )
 		{
 			pxRxDescriptor->buf1_address = (uint32_t)pxNewNetworkBuffer->pucEthernetBuffer;
-eventLogAdd("RX Recv  %d", (int)(pxRxDescriptor - rxDescriptors));
 		}
 		else
 		{
@@ -961,26 +921,14 @@ eventLogAdd("RX Recv  %d", (int)(pxRxDescriptor - rxDescriptors));
 }
 /*-----------------------------------------------------------*/
 
-UBaseType_t uxCurrentIPQueueSpace;
+static void prvEMACHandlerTask( void *pvParameters )
+{
+UBaseType_t uxCurrentCount;
+const TickType_t ulMaxBlockTime = pdMS_TO_TICKS( 500UL );
 UBaseType_t uxLastMinBufferCount = 0;
 UBaseType_t uxCurrentBufferCount = 0;
 UBaseType_t uxLowestSemCount = ( UBaseType_t ) GMAC_TX_BUFFERS - 1;
 UBaseType_t uxCurrentSemCount = 0;
-
-void emac_show_buffers( void );
-void emac_show_buffers()
-{
-	FreeRTOS_printf( ( "Queue space %lu Buff space %lu (%lu) TX space %lu (%lu)\n",
-		uxCurrentIPQueueSpace,
-		uxGetNumberOfFreeNetworkBuffers(),
-		uxLastMinBufferCount,
-		uxCurrentSemCount,
-		uxLowestSemCount) ) ;
-}
-
-static void prvEMACHandlerTask( void *pvParameters )
-{
-const TickType_t ulMaxBlockTime = pdMS_TO_TICKS( 500UL );
 uint32_t ulStatus;
 
 	/* Remove compiler warnings about unused parameters. */
@@ -1017,13 +965,13 @@ uint32_t ulStatus;
 		{
 		static UBaseType_t uxLastMinQueueSpace = 0;
 
-			uxCurrentIPQueueSpace = uxGetMinimumIPQueueSpace();
-			if( uxLastMinQueueSpace != uxCurrentIPQueueSpace )
+			uxCurrentCount = uxGetMinimumIPQueueSpace();
+			if( uxLastMinQueueSpace != uxCurrentCount )
 			{
 				/* The logging produced below may be helpful
 				while tuning +TCP: see how many buffers are in use. */
-				uxLastMinQueueSpace = uxCurrentIPQueueSpace;
-				FreeRTOS_printf( ( "Queue space: lowest %lu\n", uxCurrentIPQueueSpace ) );
+				uxLastMinQueueSpace = uxCurrentCount;
+				FreeRTOS_printf( ( "Queue space: lowest %lu\n", uxCurrentCount ) );
 			}
 		}
 		#endif /* ipconfigCHECK_IP_QUEUE_SPACE */

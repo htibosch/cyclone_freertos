@@ -162,8 +162,9 @@ int rxpbl;
 
 	writel( value, ioaddr + DMA_BUS_MODE );
 
-	/* Mask interrupts by writing to CSR7 */
-	writel( DMA_INTR_DEFAULT_MASK, ioaddr + DMA_INTR_ENA );
+	/* Mask interrupts by writing to CSR7.
+	Interrupts will be enabled later on.*/
+	writel( 0u, ioaddr + DMA_INTR_ENA );
 }
 
 void gmac_dma_start_tx( int iMacID, uint32_t chan )
@@ -281,73 +282,6 @@ uint32_t csr6 = readl(ioaddr + DMA_CONTROL);
 
 	writel(255, ioaddr + DMA_RX_WATCHDOG);
 }
-
-#if 0
-
-static void dwmac1000_dump_dma_regs(void __iomem *ioaddr, uint32_t *reg_space)
-{
-	int i;
-
-	for (i = 0; i < 22; i++)
-		if ((i < 9) || (i > 17))
-			reg_space[DMA_BUS_MODE / 4 + i] =
-				readl(ioaddr + DMA_BUS_MODE + i * 4);
-}
-
-static void dwmac1000_get_hw_feature(void __iomem *ioaddr,
-				     struct dma_features *dma_cap)
-{
-	uint32_t hw_cap = readl(ioaddr + DMA_HW_FEATURE);
-
-	dma_cap->mbps_10_100 = (hw_cap & DMA_HW_FEAT_MIISEL);
-	dma_cap->mbps_1000 = (hw_cap & DMA_HW_FEAT_GMIISEL) >> 1;
-	dma_cap->half_duplex = (hw_cap & DMA_HW_FEAT_HDSEL) >> 2;
-	dma_cap->hash_filter = (hw_cap & DMA_HW_FEAT_HASHSEL) >> 4;
-	dma_cap->multi_addr = (hw_cap & DMA_HW_FEAT_ADDMAC) >> 5;
-	dma_cap->pcs = (hw_cap & DMA_HW_FEAT_PCSSEL) >> 6;
-	dma_cap->sma_mdio = (hw_cap & DMA_HW_FEAT_SMASEL) >> 8;
-	dma_cap->pmt_remote_wake_up = (hw_cap & DMA_HW_FEAT_RWKSEL) >> 9;
-	dma_cap->pmt_magic_frame = (hw_cap & DMA_HW_FEAT_MGKSEL) >> 10;
-	/* MMC */
-	dma_cap->rmon = (hw_cap & DMA_HW_FEAT_MMCSEL) >> 11;
-	/* IEEE 1588-2002 */
-	dma_cap->time_stamp =
-	    (hw_cap & DMA_HW_FEAT_TSVER1SEL) >> 12;
-	/* IEEE 1588-2008 */
-	dma_cap->atime_stamp = (hw_cap & DMA_HW_FEAT_TSVER2SEL) >> 13;
-	/* 802.3az - Energy-Efficient Ethernet (EEE) */
-	dma_cap->eee = (hw_cap & DMA_HW_FEAT_EEESEL) >> 14;
-	dma_cap->av = (hw_cap & DMA_HW_FEAT_AVSEL) >> 15;
-	/* TX and RX csum */
-	dma_cap->tx_coe = (hw_cap & DMA_HW_FEAT_TXCOESEL) >> 16;
-	dma_cap->rx_coe_type1 = (hw_cap & DMA_HW_FEAT_RXTYP1COE) >> 17;
-	dma_cap->rx_coe_type2 = (hw_cap & DMA_HW_FEAT_RXTYP2COE) >> 18;
-	dma_cap->rxfifo_over_2048 = (hw_cap & DMA_HW_FEAT_RXFIFOSIZE) >> 19;
-	/* TX and RX number of channels */
-	dma_cap->number_rx_channel = (hw_cap & DMA_HW_FEAT_RXCHCNT) >> 20;
-	dma_cap->number_tx_channel = (hw_cap & DMA_HW_FEAT_TXCHCNT) >> 22;
-	/* Alternate (enhanced) DESC mode */
-	dma_cap->enh_desc = (hw_cap & DMA_HW_FEAT_ENHDESSEL) >> 24;
-}
-
-const struct stmmac_dma_ops dwmac1000_dma_ops = {
-	.reset = dwmac_dma_reset,
-	.init = dwmac1000_dma_init,
-	.axi = dwmac1000_dma_axi,
-	.dump_regs = dwmac1000_dump_dma_regs,
-	.dma_mode = dwmac1000_dma_operation_mode,
-	.enable_dma_transmission = dwmac_enable_dma_transmission,
-	.enable_dma_irq = dwmac_enable_dma_irq,
-	.disable_dma_irq = dwmac_disable_dma_irq,
-	.start_tx = dwmac_dma_start_tx,
-	.stop_tx = dwmac_dma_stop_tx,
-	.start_rx = dwmac_dma_start_rx,
-	.stop_rx = dwmac_dma_stop_rx,
-	.dma_interrupt = dwmac_dma_interrupt,
-	.get_hw_feature = dwmac1000_get_hw_feature,
-};
-
-#endif
 
 /* CSR1 enables the transmit DMA to check for new descriptor */
 void gmac_dma_transmit_poll( int iMacID )
@@ -527,4 +461,32 @@ gmac_rx_descriptor_t *pxDMADescriptor;
 
 void gmac_check_errors( EMACInterface_t *pxEMACif )
 {
+}
+
+void gmac_set_dma_interrupt_enable( int iMacID, uint32_t ulMask )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+
+	writel( ulMask, ioaddr + DMA_INTR_ENA );
+}
+
+void gmac_clear_dma_interrupt_status( int iMacID, uint32_t ulMask )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+	/* Write one's to clear all bits. */
+	writel( ulMask, ioaddr + DMA_STATUS );
+}
+
+uint32_t gmac_get_dma_interrupt_status( int iMacID, int iClear )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+uint32_t ulValue;
+
+	ulValue = readl( ioaddr + DMA_STATUS );
+	if( iClear != 0 )
+	{
+		/* Write one's to clear all bits. */
+		writel( ( uint32_t )~0ul, ioaddr + DMA_STATUS );
+	}
+	return ulValue;
 }

@@ -96,11 +96,17 @@ void vStartHighResolutionTimer( void )
 
 uint64_t ullGetHighResolutionTime( void )
 {
-uint64_t ullReturn;
+uint64_t ullCurrentTime, ullReturn;
 
-//	ullReturn = ( uint64_t ) xTaskGetTickCount();
-//	ullReturn = 1000ull * ullReturn;
-
-	ullReturn = alt_globaltmr_get64() / 200ull;
+	ullCurrentTime = alt_globaltmr_get64();
+	if( ullCurrentTime != 0ull )
+	{
+		ullReturn = ullCurrentTime / 200ull;
+//		ullReturn = ullCurrentTime >> 8;
+	}
+	else
+	{
+		ullReturn = 0ull;
+	}
 	return ullReturn;
 }

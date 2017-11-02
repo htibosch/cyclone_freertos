@@ -365,7 +365,10 @@ BaseType_t rc_create;
 void vUDPLoggingTaskCreate( void )
 {
 	/* Start a task which will send out the logging lines to a UDP address. */
-	rc_create = xTaskCreate( prvLoggingTask, "LogTask", configUDP_LOGGING_TASK_STACK_SIZE, NULL, configUDP_LOGGING_TASK_PRIORITY, &xLoggingTask );
+	if( xLoggingTask == NULL )
+	{
+		rc_create = xTaskCreate( prvLoggingTask, "LogTask", configUDP_LOGGING_TASK_STACK_SIZE, NULL, configUDP_LOGGING_TASK_PRIORITY, &xLoggingTask );
+	}
 }
 /*-----------------------------------------------------------*/
 

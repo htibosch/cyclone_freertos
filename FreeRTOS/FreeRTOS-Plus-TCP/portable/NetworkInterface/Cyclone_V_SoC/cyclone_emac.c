@@ -85,15 +85,9 @@ uint32_t value;
 
 	writel(value, ioaddr + GMAC_CONTROL);
 
-	/* Mask GMAC interrupts */
-	value = GMAC_INT_DEFAULT_MASK;
-
-	if (hw->pmt)
-		value &= ~GMAC_INT_DISABLE_PMT;
-	if (hw->pcs)
-		value &= ~GMAC_INT_DISABLE_PCS;
-
-	writel(value, ioaddr + GMAC_INT_MASK);
+	/* Mask GMAC interrupts.
+	This will be set later. */
+	writel(0u, ioaddr + GMAC_INT_MASK);
 
 	/* get flow-control same as Linux. */
 	value = 0xFFFF0008;
@@ -531,6 +525,26 @@ uint32_t value = MII_BUSY;
 		return -1;
 	}
 	return 0;
+}
+
+void gmac_set_emac_interrupt_enable( int iMacID, uint32_t ulMask )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+
+	writel( ulMask, ioaddr + GMAC_INT_MASK );
+}
+
+uint32_t gmac_get_emac_interrupt_status( int iMacID, int iClear )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+uint32_t ulValue;
+
+	ulValue = readl( ioaddr + GMAC_INT_STATUS );
+	if( iClear != 0 )
+	{
+		writel( ( uint32_t )~0ul, ioaddr + GMAC_INT_STATUS );
+	}
+	return ulValue;
 }
 
 volatile uint32_t phyIDs[ 8 ];

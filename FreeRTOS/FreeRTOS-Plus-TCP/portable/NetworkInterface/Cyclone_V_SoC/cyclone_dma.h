@@ -70,6 +70,35 @@ enum rx_tx_priority_ratio {
 /* DMA default interrupt mask */
 #define DMA_INTR_DEFAULT_MASK	(DMA_INTR_NORMAL | DMA_INTR_ABNORMAL)
 
+/* DMA Status register defines */
+#define DMA_STATUS_GLPII        0x40000000	/* GMAC LPI interrupt */
+#define DMA_STATUS_GPI          0x10000000	/* PMT interrupt */
+#define DMA_STATUS_GMI          0x08000000	/* MMC interrupt */
+#define DMA_STATUS_GLI          0x04000000	/* GMAC Line interface int */
+#define DMA_STATUS_EB_MASK      0x00380000	/* Error Bits Mask */
+#define DMA_STATUS_EB_TX_ABORT  0x00080000	/* Error Bits - TX Abort */
+#define DMA_STATUS_EB_RX_ABORT  0x00100000	/* Error Bits - RX Abort */
+#define DMA_STATUS_TS_MASK      0x00700000	/* Transmit Process State */
+#define DMA_STATUS_TS_SHIFT     20
+#define DMA_STATUS_RS_MASK      0x000e0000	/* Receive Process State */
+#define DMA_STATUS_RS_SHIFT     17
+#define DMA_STATUS_NIS          0x00010000	/* Normal Interrupt Summary */
+#define DMA_STATUS_AIS          0x00008000	/* Abnormal Interrupt Summary */
+#define DMA_STATUS_ERI          0x00004000	/* Early Receive Interrupt */
+#define DMA_STATUS_FBI          0x00002000	/* Fatal Bus Error Interrupt */
+#define DMA_STATUS_ETI          0x00000400	/* Early Transmit Interrupt */
+#define DMA_STATUS_RWT          0x00000200	/* Receive Watchdog Timeout */
+#define DMA_STATUS_RPS          0x00000100	/* Receive Process Stopped */
+#define DMA_STATUS_RU           0x00000080	/* Receive Buffer Unavailable */
+#define DMA_STATUS_RI           0x00000040	/* Receive Interrupt */
+#define DMA_STATUS_UNF          0x00000020	/* Transmit Underflow */
+#define DMA_STATUS_OVF          0x00000010	/* Receive Overflow */
+#define DMA_STATUS_TJT          0x00000008	/* Transmit Jabber Timeout */
+#define DMA_STATUS_TU           0x00000004	/* Transmit Buffer Unavailable */
+#define DMA_STATUS_TPS          0x00000002	/* Transmit Process Stopped */
+#define DMA_STATUS_TI           0x00000001	/* Transmit Interrupt */
+#define DMA_CONTROL_FTF         0x00100000	/* Flush transmit FIFO */
+
 /* AXI Master Bus Mode */
 #define DMA_AXI_BUS_MODE	0x00001028
 
@@ -408,5 +437,10 @@ extern void dwmac1000_dma_axi( int iMacID, struct stmmac_axi *axi );
 extern void dwmac1000_dma_init( int iMacID, struct stmmac_dma_cfg *dma_cfg );
 
 extern void dwmac1000_dma_operation_mode( int iMacID, int txmode, int rxmode );
-				  
+
+extern void gmac_set_dma_interrupt_enable( int iMacID, uint32_t ulMask );
+extern uint32_t gmac_get_dma_interrupt_status( int iMacID, int iClear );
+extern void gmac_clear_dma_interrupt_status( int iMacID, uint32_t ulMask );
+
+
 #endif /* CYCLONE_DMA_H */

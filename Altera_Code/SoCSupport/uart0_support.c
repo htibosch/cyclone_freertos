@@ -35,7 +35,7 @@
 #include "uart0_support.h"
 
 
-static ALT_16550_HANDLE_t g_uart0_handle;
+/*static*/ ALT_16550_HANDLE_t g_uart0_handle;
 
 ALT_STATUS_CODE uart0_init(void) {
 

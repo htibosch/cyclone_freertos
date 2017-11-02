@@ -332,6 +332,7 @@ typedef struct tskTaskControlBlock
 
 	#if( configGENERATE_RUN_TIME_STATS == 1 )
 		uint32_t		ulRunTimeCounter;	/*< Stores the amount of time the task has spent in the Running state. */
+		uint32_t		ulSwitchCounter;	/*< Stores the number of times the task went into Running state. */
 	#endif
 
 	#if ( configUSE_NEWLIB_REENTRANT == 1 )
@@ -890,6 +891,7 @@ UBaseType_t x;
 	#if ( configGENERATE_RUN_TIME_STATS == 1 )
 	{
 		pxNewTCB->ulRunTimeCounter = 0UL;
+		pxNewTCB->ulSwitchCounter = 0UL;
 	}
 	#endif /* configGENERATE_RUN_TIME_STATS */
 
@@ -2794,6 +2796,7 @@ void vTaskSwitchContext( void )
 				{
 					mtCOVERAGE_TEST_MARKER();
 				}
+				pxCurrentTCB->ulSwitchCounter++;
 				ulTaskSwitchedInTime = ulTotalRunTime;
 		}
 		#endif /* configGENERATE_RUN_TIME_STATS */
@@ -3441,14 +3444,17 @@ static void prvCheckTasksWaitingTermination( void )
 		#if ( configGENERATE_RUN_TIME_STATS == 1 )
 		{
 			pxTaskStatus->ulRunTimeCounter = pxTCB->ulRunTimeCounter;
+			pxTaskStatus->ulSwitchCounter = pxTCB->ulSwitchCounter;
 			if( xTaskClearCounters != pdFALSE )
 			{
-				pxTCB->ulRunTimeCounter = 0;
+				pxTCB->ulRunTimeCounter = 0ul;
+				pxTCB->ulSwitchCounter = 0ul;
 			}
 		}
 		#else
 		{
-			pxTaskStatus->ulRunTimeCounter = 0;
+			pxTaskStatus->ulRunTimeCounter = 0ul;
+			pxTaskStatus->ulSwitchCounter = 0ul;
 		}
 		#endif
 
