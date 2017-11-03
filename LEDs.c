@@ -127,7 +127,7 @@ void vSetLED( BaseType_t xValue )
 	vParTestSetLED( 3, xValue );
 }
 
-void vToggleLED( unsigned portBASE_TYPE uxLED )
+void vToggleLED()
 {
 	vParTestToggleLED( 3 );;
 }

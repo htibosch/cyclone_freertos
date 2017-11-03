@@ -571,7 +571,7 @@ int IRQ_Ok = pdFALSE;
 	{
 	case ALT_INT_INTERRUPT_EMAC1_IRQ:
 		int_count[0]++;
-		IRQ_Ok = pdTRUE;
+		/* Do not call the handler, because it does not yet use the fromISR() API's */
 		break;
 	case ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE:
 		int_count[1]++;
