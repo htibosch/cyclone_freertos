@@ -163,8 +163,6 @@ EMACInterface_t xEMACif;
 
 static int iMacID = 1;
 
-//__attribute__ ( ( aligned( 4096 ) ) ) __attribute__ ((section (".ddr_sdram"))) gmac_tx_descriptor_t txDescriptors[ GMAC_TX_BUFFERS ];
-//__attribute__ ( ( aligned( 4096 ) ) ) __attribute__ ((section (".ddr_sdram"))) gmac_rx_descriptor_t rxDescriptors[ GMAC_RX_BUFFERS ];
 __attribute__ ( ( aligned( 64 ) ) ) __attribute__ ((section (".oc_ram"))) gmac_tx_descriptor_t txDescriptors[ GMAC_TX_BUFFERS ];
 __attribute__ ( ( aligned( 64 ) ) ) __attribute__ ((section (".oc_ram"))) gmac_rx_descriptor_t rxDescriptors[ GMAC_RX_BUFFERS ];
 
@@ -241,17 +239,9 @@ eventLogAdd("TX Clear %d", (int)(DMATxDescToClear - txDescriptors));			}
 
 #define RESET_MANAGER_ADDR		0xFFD05000
 volatile ALT_RSTMGR_t *pxResetManager;
-gmac_tx_descriptor_t *pxDmaTransmit;
-gmac_rx_descriptor_t *rx_table;
-gmac_tx_descriptor_t *tx_table;
-EMAC_config_t *pxMAC_Config;
-EMAC_interrupt_t *EMAC_int_status;
-EMAC_interrupt_t *EMAC_int_mask;
-ALT_EMAC_DMA_t *EMAC_DMA_regs;
 
 
 SYSMGR_EMACGRP_t * sysmgr_emacgrp;
-volatile uint32_t desc_copy[ sizeof( gmac_tx_descriptor_t ) / 4 ];
 volatile DMA_STATUS_REG_t *dma_status_reg;
 volatile DMA_STATUS_REG_t *dma_enable_reg;
 
@@ -267,18 +257,11 @@ BaseType_t xLinkStatus;
 		pxResetManager = ( volatile ALT_RSTMGR_t * ) RESET_MANAGER_ADDR;
 		pxResetManager->permodrst.emac1 = 1;
 
-		pxMAC_Config = ( EMAC_config_t * )( ucFirstIOAddres( iMacID ) );
-		pxMAC_Config->prelen = 1;
-		EMAC_int_status = ( EMAC_interrupt_t * )( ucFirstIOAddres( iMacID ) + GMAC_INT_STATUS );
-		EMAC_int_mask   = ( EMAC_interrupt_t * )( ucFirstIOAddres( iMacID ) + GMAC_INT_MASK );
-
 		sysmgr_emacgrp = ( SYSMGR_EMACGRP_t * ) ( ALT_SYSMGR_OFST + 0x60 );
 		sysmgr_emacgrp->physel_0 = SYSMGR_EMACGRP_CTRL_PHYSEL_ENUM_RGMII;
 		sysmgr_emacgrp->physel_1 = SYSMGR_EMACGRP_CTRL_PHYSEL_ENUM_RGMII;
 		dma_status_reg = ( volatile DMA_STATUS_REG_t * ) ( ucFirstIOAddres( iMacID ) + DMA_STATUS );
 		dma_enable_reg = ( volatile DMA_STATUS_REG_t * ) ( ucFirstIOAddres( iMacID ) + DMA_INTR_ENA );
-
-		EMAC_DMA_regs = (ALT_EMAC_DMA_t *)( ucFirstIOAddres( iMacID ) + DMA_BUS_MODE );
 
 		vTaskDelay( 500ul );
 		pxResetManager->permodrst.emac1 = 0;
@@ -337,16 +320,14 @@ alt_cache_l2_sync();
 			}
 		}
 
+		/* Clear EMAC interrupt status. */
+		gmac_clear_emac_interrupt_status( iMacID, 0x0001fffful );
 		/* Clear DMA interrupt status. */
-		* ( ( uint32_t * ) dma_status_reg ) = 0x0001ffff;
-
-
-		gmac_set_emac_interrupt_enable( iMacID, ( uint32_t )~0u );// GMAC_INT_STATUS_MMCRIS | GMAC_INT_STATUS_MMCTIS );
-
+		gmac_clear_dma_interrupt_status( iMacID, 0x0001fffful );
+		/* Enable all interrupts. */
+		gmac_set_emac_interrupt_enable( iMacID, ( uint32_t )0u );
 		//#define DMA_INTR_NORMAL	( DMA_INTR_ENA_NIE | DMA_INTR_ENA_RIE | DMA_INTR_ENA_TIE )
-		gmac_set_dma_interrupt_enable( iMacID, DMA_INTR_NORMAL | DMA_INTR_ABNORMAL );//0x1ffff );//DMA_INTR_DEFAULT_MASK );
-
-if( dma_status_reg->ulValue ) {}
+		gmac_set_dma_interrupt_enable( iMacID, DMA_INTR_NORMAL | DMA_INTR_ABNORMAL );
 
 		/* The deferred interrupt handler task is created at the highest
 		possible priority to ensure the interrupt handler can return directly
@@ -368,9 +349,6 @@ if( dma_status_reg->ulValue ) {}
 }
 /*-----------------------------------------------------------*/
 
-volatile unsigned emac_check_count = 0;
-volatile unsigned emac_rx_count = 0;
-volatile unsigned emac_tx_count = 0;
 void vEMACInterrupthandler( uint32_t ulICCIAR, void * pvContext )
 {
 static uint32_t ulLastDMAStatus;
@@ -386,22 +364,19 @@ uint32_t ulDMAStatus;
 #define RX_MASK		( DMA_STATUS_RI | DMA_STATUS_RU | DMA_STATUS_OVF )
 #define TX_MASK		( DMA_STATUS_TI | DMA_STATUS_TU | DMA_STATUS_TPS )
 
-	emac_check_count++;
 	if( ( ( ulDMAStatus & RX_MASK ) == 0 ) && ( pxNextRxDesc != NULL ) && ( pxNextRxDesc->own == 0 ) )
 	{
-eventLogAdd("RX_EVENT own=0" );
+		eventLogAdd("RX_EVENT own=0" );
 		ulDMAStatus |= DMA_STATUS_RI;
 	}
 	if( ( ulDMAStatus & RX_MASK ) != 0 )
 	{
-eventLogAdd("RX_EVENT %02X", ulDMAStatus & RX_MASK );
-		emac_rx_count++;
+		eventLogAdd("RX_EVENT %02X", ulDMAStatus & RX_MASK );
 		ulISREvents |= EMAC_IF_RX_EVENT;
 	}
 	if( ( ulDMAStatus & TX_MASK ) != 0 )
 	{
-eventLogAdd("TX_EVENT %02X", ulDMAStatus & TX_MASK );
-		emac_tx_count++;
+		eventLogAdd("TX_EVENT %02X", ulDMAStatus & TX_MASK );
 		ulISREvents |= EMAC_IF_TX_EVENT;
 	}
 
@@ -513,14 +488,9 @@ const TickType_t xBlockTimeTicks = pdMS_TO_TICKS( 200u );
 				break;
 			}
 
-			rx_table = gmac_get_rx_table( iMacID );
-			tx_table = gmac_get_tx_table( iMacID );
-
 			/* This function does the actual transmission of the packet. The packet is
 			contained in 'pxDescriptor' that is passed to the function. */
 			pxDmaTxDesc = pxNextTxDesc;
-			/* pxDmaTransmit is just for debugging. */
-			pxDmaTransmit = pxNextTxDesc;
 
 			/* Is this buffer available? */
 			configASSERT ( pxDmaTxDesc->own == 0 );
@@ -565,7 +535,6 @@ const TickType_t xBlockTimeTicks = pdMS_TO_TICKS( 200u );
 				/* Set Own bit of the Tx descriptor Status: gives the buffer back to ETHERNET DMA */
 				pxDmaTxDesc->own = 1;
 eventLogAdd("TX Send  %d", (int)(pxDmaTxDesc - txDescriptors));
-//memcpy( desc_copy, pxDmaTxDesc, sizeof desc_copy );
 				/* Point to next descriptor */
 				pxNextTxDesc = ( gmac_tx_descriptor_t * ) ( pxNextTxDesc->next_descriptor );
 				/* Ensure completion of memory access */

@@ -216,8 +216,8 @@ LINKER_SCRIPT=$(CUR_PATH)/cycloneV-dk-ram.ld
 TARGET = RTOSDemo.elf
 
 # Later, use -Os
-# OPTIMIZATION = -Os
-OPTIMIZATION = -O0
+OPTIMIZATION = -Os
+# OPTIMIZATION = -O0
 
 #HT Do not use it for now
 DEBUG=-g3

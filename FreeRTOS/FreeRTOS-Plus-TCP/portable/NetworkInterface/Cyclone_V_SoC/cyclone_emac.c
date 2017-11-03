@@ -547,6 +547,13 @@ uint32_t ulValue;
 	return ulValue;
 }
 
+void gmac_clear_emac_interrupt_status( int iMacID, uint32_t ulMask )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+
+	writel( ulMask, ioaddr + GMAC_INT_STATUS );
+}
+
 volatile uint32_t phyIDs[ 8 ];
 volatile uint32_t *IOaddr;
 volatile uint16_t ulLowerID, ulUpperID;

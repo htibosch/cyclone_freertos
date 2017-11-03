@@ -108,6 +108,10 @@ union xPointer {
 	uint32_t uint32;
 };
 
+#define __MB( pxPointer, field )	\
+	do { \
+		if( ( ( volatile union xPointer * )&pxPointer )->field ) {} \
+	} while( 0 )
 
 #if( SIMPLE_MEMCPY == 0 )
 void *memcpy( void *pvDest, const void *pvSource, size_t ulBytes )
@@ -125,7 +129,7 @@ uint32_t ulAlignBits;
 
 	if( ( ulAlignBits & 0x01 ) == 0 )
 	{
-		if( ( ( pxSource.uint32 & 1 ) != 0 ) && ( pxSource.u8 < pxLastSource.u8 ) )
+		if( ( ( ( ( uint32_t ) pxSource.u8 ) & 1 ) != 0 ) && ( pxSource.u8 < pxLastSource.u8 ) )
 		{
 			*( pxDestination.u8++ ) = *( pxSource.u8++) ;
 		}
@@ -148,7 +152,8 @@ uint32_t ulAlignBits;
 			int iCount;
 			uint32_t extra;
 
-			if( ( ( pxSource.uint32 & 2 ) != 0 ) && ( pxSource.u8 < pxLastSource.u8 - 1 ) )
+			__MB( pxSource, u16);
+			if( ( ( ( ( uint32_t ) pxSource.u16 ) & 2 ) != 0 ) && ( ( ( uint8_t * ) pxSource.u16 ) < pxLastSource.u8 - 1 ) )
 			{
 				*( pxDestination.u16++ ) = *( pxSource.u16++) ;
 			}
@@ -157,6 +162,9 @@ uint32_t ulAlignBits;
 
 			pxLastSource.uint32 &= ~0x03ul;
 			iCount = pxLastSource.u32 - pxSource.u32;
+
+			__MB( pxSource, u32 );
+			__MB( pxDestination, u32 );
 			while( iCount > 8 )
 			{
 				/* Copy 32 bytes */
@@ -204,6 +212,10 @@ uint32_t ulAlignBits;
 			iCount -= 8;
 		}
 	}
+	__MB( pxSource, u8);
+	__MB( pxLastSource, u8);
+	__MB( pxDestination, u8 );
+
 	while( pxSource.u8 < pxLastSource.u8 )
 	{
 		*( pxDestination.u8++ ) = *( pxSource.u8++ );
@@ -264,6 +276,7 @@ uint32_t ulPattern;
 		ulExtra = pxLast.uint32 & 0x03ul;
 
 		pxLast.uint32 &= ~0x03ul;
+		__MB( pxDestination, u32 );
 		iCount = ( int ) ( pxLast.u32 - pxDestination.u32 );
 		while( iCount > 8 )
 		{
@@ -289,6 +302,8 @@ uint32_t ulPattern;
 		pxLast.uint32 |= ulExtra;
 	}
 
+	__MB( pxDestination, u8 );
+	__MB( pxLast, u8 );
 	while( pxDestination.u8 < pxLast.u8 )
 	{
 		pxDestination.u8[ 0 ] = ( unsigned char ) iValue;

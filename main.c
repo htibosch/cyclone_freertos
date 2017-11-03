@@ -189,10 +189,12 @@ static INT_DISPATCH_t xISRHandlers[ ALT_INT_PROVISION_INT_COUNT ];
 defined here will be used if ipconfigUSE_DHCP is 0, or if ipconfigUSE_DHCP is
 1 but a DHCP server could not be contacted.  See the online documentation for
 more information. */
-static const uint8_t ucIPAddress[ 4 ] = { configIP_ADDR0, configIP_ADDR1, configIP_ADDR2, configIP_ADDR3 };
-static const uint8_t ucNetMask[ 4 ] = { configNET_MASK0, configNET_MASK1, configNET_MASK2, configNET_MASK3 };
-static const uint8_t ucGatewayAddress[ 4 ] = { configGATEWAY_ADDR0, configGATEWAY_ADDR1, configGATEWAY_ADDR2, configGATEWAY_ADDR3 };
-static const uint8_t ucDNSServerAddress[ 4 ] = { configDNS_SERVER_ADDR0, configDNS_SERVER_ADDR1, configDNS_SERVER_ADDR2, configDNS_SERVER_ADDR3 };
+#define	_A4_	__attribute__ ( ( aligned( 4 ) ) )
+/* When not aligned, code might crash because of 32-bit access to const data. */
+static _A4_ const uint8_t ucIPAddress[ 4 ] = { configIP_ADDR0, configIP_ADDR1, configIP_ADDR2, configIP_ADDR3 };
+static _A4_ const uint8_t ucNetMask[ 4 ] = { configNET_MASK0, configNET_MASK1, configNET_MASK2, configNET_MASK3 };
+static _A4_ const uint8_t ucGatewayAddress[ 4 ] = { configGATEWAY_ADDR0, configGATEWAY_ADDR1, configGATEWAY_ADDR2, configGATEWAY_ADDR3 };
+static _A4_ const uint8_t ucDNSServerAddress[ 4 ] = { configDNS_SERVER_ADDR0, configDNS_SERVER_ADDR1, configDNS_SERVER_ADDR2, configDNS_SERVER_ADDR3 };
 
 /* Default MAC address configuration.  The demo creates a virtual network
 connection that uses this MAC address by accessing the raw Ethernet data
@@ -201,7 +203,7 @@ configNETWORK_INTERFACE_TO_USE definition for information on how to configure
 the real network connection to use. */
 
 /* 00:11:22:33:44:49 */
-const uint8_t ucMACAddress[ 6 ] = { configMAC_ADDR0, configMAC_ADDR1, configMAC_ADDR2, configMAC_ADDR3, configMAC_ADDR4, configMAC_ADDR5 };
+const _A4_ uint8_t ucMACAddress[ 6 ] = { configMAC_ADDR0, configMAC_ADDR1, configMAC_ADDR2, configMAC_ADDR3, configMAC_ADDR4, configMAC_ADDR5 };
 
 /* Use by the pseudo random number generator. */
 static UBaseType_t ulNextRand;
@@ -281,6 +283,7 @@ extern BaseType_t xPlusTCPStarted;
 		BaseType_t xLastCount = 0;
 		char cLastBuffer[ 16 ];
 		char cBuffer[ 128 ];
+		BaseType_t xLedValue = 0;
 
 		xServerSemaphore = xSemaphoreCreateBinary();
 		configASSERT( xServerSemaphore != NULL );
@@ -313,6 +316,11 @@ extern BaseType_t xPlusTCPStarted;
 
 			xSemaphoreTake( xServerSemaphore, xReceiveTimeOut );
 
+			vSetLED( xLedValue < 3 );
+			if( ++xLedValue >= 6 )
+			{
+				xLedValue = 0;
+			}
 			xSocket = xLoggingGetSocket();
 			{
 				if( ( xSocket != NULL ) && ( xHadSocket == pdFALSE ) && ( xTasksAlreadyCreated ) )

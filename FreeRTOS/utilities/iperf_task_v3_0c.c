@@ -451,6 +451,11 @@ BaseType_t xRecvResult;
 					if( pxClient->bits.bTimed == pdFALSE_UNSIGNED )
 					{
 						pxClient->ulAmount -= xSize;
+						if( pxClient->ulAmount == 0ul )
+						{
+							/* All data have been sent. No longer interested in eSELECT_WRITE events. */
+							FreeRTOS_FD_CLR( pxClient->xServerSocket, xSocketSet, eSELECT_WRITE );
+						}
 					}
 					if( xSize <= 0 )
 					{

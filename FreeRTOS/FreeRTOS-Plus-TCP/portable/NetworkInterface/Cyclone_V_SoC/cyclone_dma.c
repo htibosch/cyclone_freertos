@@ -339,18 +339,12 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 	writel( ( uint32_t ) pxDMATable, ioaddr + DMA_TX_BASE_ADDR );
 }
 
-#warning Debugging variables
-extern gmac_rx_descriptor_t *rx_table;
-extern gmac_tx_descriptor_t *tx_table;
-
 BaseType_t gmac_tx_descriptor_init( int iMacID, gmac_tx_descriptor_t *pxDMATable, uint8_t *ucDataBuffer, uint32_t ulBufferCount )
 {
 uint32_t i = 0;
 gmac_tx_descriptor_t *pxDMADescriptor;
 
 	memset( pxDMATable, '\0', ulBufferCount * sizeof( *pxDMATable ) );
-
-	tx_table = gmac_get_tx_table( iMacID );
 
 	/* Fill each DMA descriptor with the right values */
 	for( i=0; i < ulBufferCount; i++ )
@@ -401,8 +395,6 @@ BaseType_t xReturn = 1;
 gmac_rx_descriptor_t *pxDMADescriptor;
 
 	memset( pxDMATable, '\0', ulBufferCount * sizeof( *pxDMATable ) );
-
-	rx_table = gmac_get_rx_table( iMacID );
 
 	/* Fill each DMA descriptor with the right values */
 	for( i = 0; i < ulBufferCount; i++ )

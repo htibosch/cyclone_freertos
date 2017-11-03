@@ -291,6 +291,7 @@ void dwmac1000_core_init(int iMacID, EMACDeviceInfo_t *hw, int mtu);
 void gmac_enable_transmission(int iMacID, bool enable);
 
 void gmac_set_emac_interrupt_enable( int iMacID, uint32_t ulMask );
+void gmac_clear_emac_interrupt_status( int iMacID, uint32_t ulMask );
 uint32_t gmac_get_emac_interrupt_status( int iMacID, int iClear );
 
 static __inline uint8_t *ucFirstIOAddres(int iMacID)
