@@ -78,6 +78,7 @@
 #include "NetworkBufferManagement.h"
 #include "FreeRTOS_DNS.h"
 
+#include "eventLogging.h"
 
 /* Used to ensure the structure packing is having the desired effect.  The
 'volatile' is used to prevent compiler warnings about comparing a constant with
@@ -1408,7 +1409,7 @@ EthernetHeader_t *pxEthernetHeader;
 volatile eFrameProcessingResult_t eReturned; /* Volatile to prevent complier warnings when ipCONSIDER_FRAME_FOR_PROCESSING just sets it to eProcessBuffer. */
 
 	configASSERT( pxNetworkBuffer );
-
+eventLogAdd("process %u byte", pxNetworkBuffer->xDataLength);
 	/* Interpret the Ethernet frame. */
 	eReturned = ipCONSIDER_FRAME_FOR_PROCESSING( pxNetworkBuffer->pucEthernetBuffer );
 	pxEthernetHeader = ( EthernetHeader_t * ) ( pxNetworkBuffer->pucEthernetBuffer );

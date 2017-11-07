@@ -88,6 +88,7 @@
 #include "FreeRTOS_TCP_WIN.h"
 
 #include "eventLogging.h"
+#include "hr_gettime.h"
 
 /* Just make sure the contents doesn't get compiled if TCP is not enabled. */
 #if ipconfigUSE_TCP == 1
@@ -2185,6 +2186,28 @@ int32_t lLength, lTCPHeaderLength, lReceiveLength, lUrgentLength;
 }
 /*-----------------------------------------------------------*/
 
+typedef struct xSTimer {
+	uint64_t ullStartTime;
+} STimer;
+
+static void timer_init( STimer *pxTimer )
+{
+	pxTimer->ullStartTime = ullGetHighResolutionTime();
+}
+
+static uint32_t timer_get( STimer *pxTimer )
+{
+uint64_t ullNow;
+uint32_t ulDiff;
+	ullNow = ullGetHighResolutionTime();
+	ulDiff = ( uint32_t ) ( ullNow - pxTimer->ullStartTime );
+	pxTimer->ullStartTime = ullNow;
+
+	return ulDiff;
+}
+
+//extern uint32_t ulStoreTime;
+
 /*
  * prvStoreRxData(): called from prvTCPHandleState()
  *
@@ -2200,7 +2223,10 @@ TCPWindow_t *pxTCPWindow = &pxSocket->u.xTCP.xTCPWindow;
 uint32_t ulSequenceNumber, ulSpace;
 int32_t lOffset, lStored;
 BaseType_t xResult = 0;
+//STimer xTimer;
+//uint32_t t1 = 0ul, t2 = 0ul;
 
+//timer_init( &xTimer );
 	ulSequenceNumber = FreeRTOS_ntohl( pxTCPHeader->ulSequenceNumber );
 
 	if( ( ulReceiveLength > 0u ) && ( pxSocket->u.xTCP.ucTCPState >= eSYN_RECEIVED ) )
@@ -2222,6 +2248,7 @@ BaseType_t xResult = 0;
 		}
 
 		lOffset = lTCPWindowRxCheck( pxTCPWindow, ulSequenceNumber, ulReceiveLength, ulSpace );
+//t1 = timer_get( &xTimer );
 
 		if( lOffset >= 0 )
 		{
@@ -2230,6 +2257,7 @@ BaseType_t xResult = 0;
 			In case the low-water mark is reached, bLowWater will be set
 			"low-water" here stands for "little space". */
 			lStored = lTCPAddRxdata( pxSocket, ( uint32_t ) lOffset, pucRecvData, ulReceiveLength );
+//t2 = timer_get( &xTimer );
 
 			if( lStored != ( int32_t ) ulReceiveLength )
 			{
@@ -3115,6 +3143,8 @@ BaseType_t xResult = pdPASS;
 
 		/* In prvTCPHandleState() the incoming messages will be handled
 		depending on the current state of the connection. */
+eventLogAdd("TCPHandleState");
+
 		if( prvTCPHandleState( pxSocket, &pxNetworkBuffer ) > 0 )
 		{
 			/* prvTCPHandleState() has sent a message, see if there are more to

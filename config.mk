@@ -151,10 +151,10 @@ ifeq ($(USE_USART),true)
 		$(CUR_PATH)/serial.c
 endif
 
-#DEFS += -D SIMPLE_MEMCPY=1
-#DEFS += -D SIMPLE_MEMSET=1
-#C_SRCS += \
-# 	$(COMMON_UTILS_PATH)/memcpy.c
+DEFS += -D SIMPLE_MEMCPY=0
+DEFS += -D SIMPLE_MEMSET=0
+C_SRCS += \
+ 	$(COMMON_UTILS_PATH)/memcpy.c
 
 #C_SRCS += \
 #	$(COMMON_UTILS_PATH)/memcpy_simple.c
@@ -187,6 +187,8 @@ ifeq ($(USE_TELNET),true)
 	DEFS += -D USE_TELNET=1
 	C_SRCS += \
 		$(UTILITIES_PATH)/telnet.c
+else
+	DEFS += -D USE_TELNET=0
 endif
 
 ifeq ($(USE_FREERTOS_FAT),true)
@@ -226,7 +228,7 @@ LINKER_SCRIPT=$(CUR_PATH)/cycloneV-dk-ram.ld
 TARGET = RTOSDemo.elf
 
 # Later, use -Os
-OPTIMIZATION = -Os
+OPTIMIZATION = -O0
 # OPTIMIZATION = -O0
 
 #HT Do not use it for now
@@ -239,7 +241,6 @@ C_EXTRA_FLAGS= \
 	-mtune=cortex-a9 \
 	-mcpu=cortex-a9 \
 	-march=armv7-a \
-	-mfpu=neon \
 	-std=c99 \
 	-fno-builtin-memcpy \
 	-fno-builtin-memset \
@@ -264,5 +265,4 @@ LD_EXTRA_FLAGS= \
 	-Xlinker --defsym=__cs3_isr_swi=FreeRTOS_SWI_Handler \
 	-Xlinker -Map=RTOSDemo.map \
 	-Xlinker --gc-sections \
-	-Xlinker --allow-multiple-definition \
-	-mfpu=neon
+	-Xlinker --allow-multiple-definition

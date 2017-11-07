@@ -22,8 +22,8 @@
 
 #include "telnet.h"
 
+static TelnetClient_t *pxTelnetAddSocket( Telnet_t *pxTelnet );
 static void vTelnetRemove( Telnet_t * pxTelnet, TelnetClient_t *pxClient );
-static void vTelnetAddSocket( Telnet_t *pxTelnet, Socket_t xSocket );
 
 static TelnetClient_t *pxTelnetAddSocket( Telnet_t *pxTelnet )
 {
@@ -32,7 +32,7 @@ TelnetClient_t *pxNewClient;
 	pxNewClient = pvPortMalloc( sizeof( *pxNewClient ) );
 	if( pxNewClient != NULL )
 	{
-		memset( pxNewClient, '\0', sizeof *pxNewClient );
+		memset( pxNewClient, '\0', sizeof( *pxNewClient ) );
 
 		if( pxTelnet->xClients == NULL )
 		{
@@ -41,6 +41,7 @@ TelnetClient_t *pxNewClient;
 		else
 		{
 		TelnetClient_t *pxClient;
+
 			pxClient = pxTelnet->xClients;
 			while( pxClient->pxNext != NULL )
 			{
@@ -59,7 +60,7 @@ TelnetClient_t *pxList;
 
 	if( pxTelnet->xClients == pxClient )
 	{
-		pxTelnet->xClients = NULL;
+		pxTelnet->xClients = pxClient->pxNext;
 	}
 	else
 	{
@@ -68,12 +69,14 @@ TelnetClient_t *pxList;
 		{
 			if( pxList->pxNext == pxClient )
 			{
-				pxList->pxNext = NULL;
+				pxList->pxNext = pxClient->pxNext;
 				break;
 			}
 			pxList = pxList->pxNext;
 		} while( pxList != NULL );
 	}
+	FreeRTOS_closesocket( pxClient->xSocket );
+	vPortFree( pxClient );
 }
 /*-----------------------------------------------------------*/
 
@@ -93,10 +96,7 @@ BaseType_t xResult = 0;
 			if( ( xResult < 0 ) && ( xResult != -( pdFREERTOS_ERRNO_EAGAIN ) ) )
 			{
 				FreeRTOS_printf( ( "xTelnetSend: client %p disconnected (rc %d)\n", pxList->xSocket, xResult ) );
-
-				FreeRTOS_closesocket( pxList->xSocket );
 				vTelnetRemove( pxTelnet, pxList );
-				vPortFree( pxList );
 			}
 			if( pxAddress != NULL )
 			{
@@ -152,9 +152,7 @@ BaseType_t xResult = 0;
 			if( ( xResult < 0 ) && ( xResult != -( pdFREERTOS_ERRNO_EAGAIN ) ) )
 			{
 			FreeRTOS_printf( ( "xTelnetRead: client %p disconnected (rc %d)\n", xSocket, xResult ) );
-				FreeRTOS_closesocket( xSocket );
 				vTelnetRemove( pxTelnet, pxClient );
-				vPortFree( pxClient );
 			}
 			pxClient = pxNextClient;
 		}

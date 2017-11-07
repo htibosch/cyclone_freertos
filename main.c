@@ -115,6 +115,10 @@
 
 #include "eventLogging.h"
 
+#if( USE_TELNET != 0 )
+	#include "telnet.h"
+#endif
+
 #if( USE_IPERF != 0 )
 	#include "iperf_task.h"
 #endif
@@ -223,6 +227,11 @@ static TaskHandle_t xCommandTaskHandle = NULL;
 
 static alt_freq_t ulMPUFrequency;
 
+#if( USE_TELNET != 0 )
+	static Telnet_t xTelnet;
+	static BaseType_t xTelnetCreated;
+#endif
+
 #define RECEIVE_TASK_STACK_SIZE		640
 #define RECEIVE_TASK_PRIORITY		2
 
@@ -318,8 +327,6 @@ extern BaseType_t xPlusTCPStarted;
 		alt_16550_int_enable_rx(&g_uart0_handle);
 		alt_16550_int_enable_tx(&g_uart0_handle);
 
-//		xTelnetCreate( &xTelnet, 23 );
-
 		for( ;; )
 		{
 		TickType_t xReceiveTimeOut = pdMS_TO_TICKS( 200 );
@@ -345,7 +352,7 @@ extern BaseType_t xPlusTCPStarted;
 					FreeRTOS_setsockopt( xSocket, 0, FREERTOS_SO_SET_SEMAPHORE, ( void * ) &xServerSemaphore, sizeof( xServerSemaphore ) );
 					//FreeRTOS_setsockopt( xSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof( xReceiveTimeOut ) );
 				}
-				xCount = 0;// xTelnetRecv( &xTelnet, &xSourceAddress, cBuffer, sizeof( cBuffer ) - 1 );
+				xCount = 0;
 
 				if( xCount == 0 )
 				{
@@ -357,6 +364,29 @@ extern BaseType_t xPlusTCPStarted;
 						xCount = rc;
 					}
 				}
+				#if( USE_TELNET != 0 )
+				if( xTelnetCreated == pdFALSE )
+				{
+					xTelnetCreated = pdTRUE;
+					xTelnetCreate( &xTelnet, 23 );
+				}
+
+				if( ( xCount == 0 ) && ( xPlusTCPStarted != 0 ) )
+				{
+				int rc;
+					rc = xTelnetRecv( &xTelnet, &xSourceAddress, cBuffer, sizeof( cBuffer ) - 1 );
+					if( rc > 0 )
+					{
+						if( cBuffer[ rc - 2 ] == '\r' )
+						{
+							cBuffer[ rc - 2 ] = '\n';
+							rc--;
+						}
+						eventLogAdd("Telnet INPUT %d", rc);
+						xCount = rc;
+					}
+				}
+				#endif
 
 				if( ( xSocket != NULL ) && ( xCount == 0 ) )
 				{
@@ -382,6 +412,10 @@ extern BaseType_t xPlusTCPStarted;
 				if( ( xCount > 0 ) && ( cBuffer[ 0 ] >= 32 ) && ( cBuffer[ 0 ] < 0x7F ) )
 				{
 					cBuffer[ xCount ] = '\0';
+					if( cBuffer[ xCount - 1 ]  == '\n' )
+					{
+						cBuffer[ --xCount ]  = '\0';
+					}
 					FreeRTOS_printf( ( ">> %s\n", cBuffer ) );
 					if( strncmp( cBuffer, "ver", 3 ) == 0 )
 					{
@@ -939,6 +973,14 @@ void vUDPLoggingHook( const char *pcMessage, BaseType_t xLength )
 {
 	void *pxPort = NULL;
 	vSerialPutString( pxPort, ( const char * )pcMessage, ( unsigned short ) xLength );
+	#if( USE_TELNET != 0 )
+	{
+		if( xTelnetCreated != pdFALSE )
+		{
+			xTelnetSend( &xTelnet, ( struct freertos_sockaddr * )NULL, pcMessage, xLength );
+		}
+	}
+	#endif
 }
 
 uint32_t *pulMAC_Config;

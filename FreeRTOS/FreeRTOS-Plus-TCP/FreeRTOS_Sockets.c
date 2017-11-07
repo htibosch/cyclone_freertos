@@ -73,6 +73,9 @@
 #include "FreeRTOS_DNS.h"
 #include "NetworkBufferManagement.h"
 
+#include "eventLogging.h"
+#include "hr_gettime.h"
+
 /* The ItemValue of the sockets xBoundSocketListItem member holds the socket's
 port number. */
 #define socketSET_SOCKET_PORT( pxSocket, usPort ) listSET_LIST_ITEM_VALUE( ( &( ( pxSocket )->xBoundSocketListItem ) ), ( usPort ) )
@@ -3010,9 +3013,8 @@ void vSocketWakeUpUser( FreeRTOS_Socket_t *pxSocket )
 			}
 		}
 		#endif /* ipconfigUSE_CALLBACKS */
-
 		xResult = ( int32_t ) uxStreamBufferAdd( pxStream, uxOffset, pcData, ( size_t ) ulByteCount );
-
+eventLogAdd("BufferAdd %lu", ulByteCount );
 		#if( ipconfigHAS_DEBUG_PRINTF != 0 )
 		{
 			if( xResult != ( int32_t ) ulByteCount )
