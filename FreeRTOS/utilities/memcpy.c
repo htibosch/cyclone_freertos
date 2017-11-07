@@ -118,7 +118,7 @@ union xPointer {
 };
 
 #if( SIMPLE_MEMCPY == 0 )
-void *x_memcpy( void *pvDest, const void *pvSource, size_t ulBytes )
+void *memcpy( void *pvDest, const void *pvSource, size_t ulBytes )
 {
 union xPointer pxDestination;
 union xPointer pxSource;
@@ -274,7 +274,7 @@ size_t x;
 
 
 #if( SIMPLE_MEMSET == 0 )
-void *x_memset(void *pvDest, int iValue, size_t ulBytes)
+void *memset(void *pvDest, int iValue, size_t ulBytes)
 {
 union xPointer pxDestination;
 union xPointer pxLast;

@@ -258,7 +258,11 @@ int main( void )
 	FreeRTOS_IPInit( ucIPAddress, ucNetMask, ucGatewayAddress, ucDNSServerAddress, ucMACAddress );
 
 	xTaskCreate( prvCommandTask, "Command", mainCOMMAND_TASK_STACK_SIZE, NULL, mainCOMMAND_TASK_PRIORITY, &xCommandTaskHandle );
-
+	#if( USE_LOG_EVENT != 0 )
+	{
+		iEventLogInit();
+	}
+	#endif
 	/* Start the tasks and timer running. */
 	vTaskStartScheduler();
 
@@ -584,6 +588,7 @@ int IRQ_Ok = pdFALSE;
 	{
 	case ALT_INT_INTERRUPT_EMAC1_IRQ:
 		int_count[0]++;
+		IRQ_Ok = pdTRUE;
 		/* Do not call the handler, because it does not yet use the fromISR() API's */
 		break;
 	case ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE:
@@ -1246,8 +1251,13 @@ struct SMEmcpyData {
 typedef void * ( * FMemcpy ) ( void *pvDest, const void *pvSource, size_t ulBytes );
 typedef void * ( * FMemset ) ( void *pvDest, int iChar, size_t ulBytes );
 
-void *x_memcpy( void *pvDest, const void *pvSource, size_t ulBytes );
-void *x_memset(void *pvDest, int iValue, size_t ulBytes);
+void *x_memcpy( void *pvDest, const void *pvSource, size_t ulBytes )
+{
+}
+
+void *x_memset(void *pvDest, int iValue, size_t ulBytes)
+{
+}
 
 #define 	LOOP_COUNT		100
 

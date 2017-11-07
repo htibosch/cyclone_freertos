@@ -246,7 +246,7 @@ to a pre-determinable value. */
 
 /* Optimisation that allows more than one Rx buffer to be passed to the TCP task
 at a time - requires driver support. */
-#define ipconfigUSE_LINKED_RX_MESSAGES		( 0 )
+#define ipconfigUSE_LINKED_RX_MESSAGES				( 1 )
 
 #define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS		( 40 )
 
@@ -376,10 +376,15 @@ server task. */
 #define ipconfigNETWORK_BUFFER_DEBUG			0
 #define	ipconfigTCP_IP_SANITY					0
 
-#define ipconfigIPERF_TX_BUFSIZE    ( 8 * ipconfigTCP_MSS )	/* Units of bytes. */
-#define ipconfigIPERF_TX_WINSIZE	( 4 )			/* Size in units of MSS */
-#define ipconfigIPERF_RX_BUFSIZE	( 8 * ipconfigTCP_MSS )	/* Units of bytes. */
-#define ipconfigIPERF_RX_WINSIZE	( 4 )			/* Size in units of MSS */
+#define ipconfigIPERF_TX_BUFSIZE    ( 12 * ipconfigTCP_MSS )	/* Units of bytes. */
+#define ipconfigIPERF_TX_WINSIZE	( 8 )			/* Size in units of MSS */
+#define ipconfigIPERF_RX_BUFSIZE	( 12 * ipconfigTCP_MSS )	/* Units of bytes. */
+#define ipconfigIPERF_RX_WINSIZE	( 8 )			/* Size in units of MSS */
+
+// #define ipconfigIPERF_TX_BUFSIZE    ( 4 * ipconfigTCP_MSS )	/* Units of bytes. */
+// #define ipconfigIPERF_TX_WINSIZE	( 2 )			/* Size in units of MSS */
+// #define ipconfigIPERF_RX_BUFSIZE	( 4 * ipconfigTCP_MSS )	/* Units of bytes. */
+// #define ipconfigIPERF_RX_WINSIZE	( 2 )			/* Size in units of MSS */
 
 
 #define ipconfigTCP_FILE_BUFFER_SIZE		( 8 * ipconfigTCP_MSS )

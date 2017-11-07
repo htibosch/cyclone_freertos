@@ -247,7 +247,6 @@ volatile ALT_RSTMGR_t *pxResetManager;
 SYSMGR_EMACGRP_t * sysmgr_emacgrp;
 volatile DMA_STATUS_REG_t *dma_status_reg;
 volatile DMA_STATUS_REG_t *dma_enable_reg;
-volatile alt_int_cpu_target_t cur_cpu;
 
 BaseType_t xNetworkInterfaceInitialise( void )
 {
@@ -302,33 +301,15 @@ alt_cache_l2_sync();
 
 		prvGMACWaitLS( xWaitLinkDelay );
 
-// portLOWEST_USABLE_INTERRUPT_PRIORITY << portPRIORITY_SHIFT
 //#define EMAC_INT_PRIOITY		( ( 15u ) << portPRIORITY_SHIFT )
 //#define EMAC_INT_PRIOITY		( ( 2u ) << portPRIORITY_SHIFT )
-#define EMAC_INT_PRIOITY		( 128u )
-
+#define EMAC_INT_PRIOITY		( ( configMAX_API_CALL_INTERRUPT_PRIORITY + 1 ) << portPRIORITY_SHIFT )
 
 		vRegisterIRQHandler( ALT_INT_INTERRUPT_EMAC1_IRQ, vEMACInterrupthandler, ( void *)&xEMACif );
 		alt_int_dist_priority_set( ALT_INT_INTERRUPT_EMAC1_IRQ, EMAC_INT_PRIOITY );
 		alt_int_dist_enable( ALT_INT_INTERRUPT_EMAC1_IRQ );
 		alt_int_dist_trigger_set( ALT_INT_INTERRUPT_EMAC1_IRQ, ALT_INT_TRIGGER_AUTODETECT );
-		{
-			alt_int_dist_target_get( ALT_INT_INTERRUPT_EMAC1_IRQ, &cur_cpu);
-			alt_int_dist_target_set( ALT_INT_INTERRUPT_EMAC1_IRQ, (alt_int_cpu_target_t)0x01);
-		}
-
-//		alt_int_dist_trigger_set( ALT_INT_INTERRUPT_EMAC1_IRQ, ALT_INT_TRIGGER_EDGE );
-
-//		{
-//			int index;
-//			for (index = 0; index < 1023; index++) {
-//				if (index == ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE)
-//					continue;
-//				vRegisterIRQHandler( index, vEMACInterrupthandler, ( void *)&xEMACif );
-//				alt_int_dist_priority_set( index, EMAC_INT_PRIOITY );
-//				alt_int_dist_enable( index );
-//			}
-//		}
+		alt_int_dist_target_set( ALT_INT_INTERRUPT_EMAC1_IRQ, (alt_int_cpu_target_t)0x01);
 
 		/* Clear EMAC interrupt status. */
 		gmac_clear_emac_interrupt_status( iMacID, 0x0001fffful );
@@ -363,12 +344,15 @@ alt_cache_l2_sync();
 /*-----------------------------------------------------------*/
 
 volatile uint32_t ulCheckStatus;
+/* Variable must be set by main.c as soon as +TCP is up. */
+BaseType_t xPlusTCPStarted;
 
 void vEMACInterrupthandler( uint32_t ulICCIAR, void * pvContext )
 {
 static uint32_t ulLastDMAStatus;
 uint32_t ulDMAStatus;
 DMA_STATUS_REG_t reg;
+BaseType_t xHigherPriorityTaskWoken = 0ul;
 //uint32_t ulEMACStatus;
 
 	/* Get DMA interrupt status and clear all bits. */
@@ -397,11 +381,11 @@ DMA_STATUS_REG_t reg;
 	reg.ulValue = ulDMAStatus;
 	ulDMAStatus &= ISR_MASK;
 
-	if( ( ( ulDMAStatus & RX_MASK ) == 0 ) && ( pxNextRxDesc != NULL ) && ( pxNextRxDesc->own == 0 ) )
-	{
-		eventLogAdd("RX_EVENT own=0" );
-		ulDMAStatus |= DMA_STATUS_RI;
-	}
+//	if( ( ( ulDMAStatus & RX_MASK ) == 0 ) && ( pxNextRxDesc != NULL ) && ( pxNextRxDesc->own == 0 ) )
+//	{
+//		eventLogAdd("RX_EVENT own=0" );
+//		ulDMAStatus |= DMA_STATUS_RI;
+//	}
 	if( ( ulDMAStatus & RX_MASK ) != 0 )
 	{
 		eventLogAdd("RX_EVENT%s%s %04lX %X %X %X",
@@ -429,12 +413,12 @@ DMA_STATUS_REG_t reg;
 
 	if( ( ulISREvents != 0 ) && ( xEMACTaskHandle != NULL ) )
 	{
-		xTaskNotifyGive( xEMACTaskHandle );
-//		vTaskNotifyGiveFromISR( xEMACTaskHandle, &xHigherPriorityTaskWoken );
+		vTaskNotifyGiveFromISR( xEMACTaskHandle, &xHigherPriorityTaskWoken );
 	}
 	if( ulDMAStatus & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) )
 	{
 	uint32_t ulStatus;
+
 		ulStatus = gmac_clear_dma_interrupt_status( iMacID, ulDMAStatus & ( TX_MASK | RX_MASK ) ) & ISR_MASK;
 		if( ( ulStatus & DMA_STATUS_NIS ) != 0ul )
 		{
@@ -450,51 +434,10 @@ DMA_STATUS_REG_t reg;
 		}
 		ulLastDMAStatus = ulDMAStatus;
 	}
+
+	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 }
-
-#if( configUSE_IDLE_HOOK == 1 )
-	/* Variable must be set by main.c as soon as +TCP is up. */
-	BaseType_t xPlusTCPStarted;
-
-	extern void vApplicationIdleHook( void );
-	void vApplicationIdleHook()
-	{
-		if( xPlusTCPStarted )
-		{
-//		static uint64_t ullLastTime = 0ull;
-//		uint64_t ullNow = ullGetHighResolutionTime();
-//		uint32_t ullDiff = ullNow - ullLastTime;
-
-//			if( ullDiff >= 100ul )
-			{
-				vEMACInterrupthandler( ALT_INT_INTERRUPT_EMAC1_IRQ, ( void *)&xEMACif );
-			}
-//			ullLastTime = ullNow;
-		}
-	}
-#endif
-
-static void vWaitTxDone(void);
-static void vWaitTxDone()
-{
-int iCount;
-	/* Temporary function, will be removed. */
-	for( iCount = 10; iCount; iCount-- )
-	{
-		if( ( uxSemaphoreGetCount( xTXDescriptorSemaphore ) < GMAC_TX_BUFFERS ) &&
-			( DMATxDescToClear->own == 0 ) )
-		{
-			/* This will be done from within an ISR ( transmission done ). */
-			ulISREvents |= EMAC_IF_TX_EVENT;
-			if( xEMACTaskHandle != NULL )
-			{
-				xTaskNotifyGive( xEMACTaskHandle );
-			}
-			break;
-		}
-		vTaskDelay( 2 );
-	}
-}
+/*-----------------------------------------------------------*/
 
 BaseType_t xNetworkInterfaceOutput( NetworkBufferDescriptor_t * const pxDescriptor, BaseType_t bReleaseAfterSend )
 {
@@ -597,6 +540,7 @@ alt_cache_l2_sync();
 //				gmac_dma_start_tx( iMacID, 0 );
 				if( ( gmac_reg_read( iMacID, DMA_STATUS) & DMA_STATUS_TU ) != 0ul )
 				{
+					/* Transmit Buffer Unavailable, send a poll command to resume. */
 					do
 					{
 						gmac_reg_write( iMacID, DMA_STATUS, DMA_STATUS_TU );
@@ -607,19 +551,8 @@ alt_cache_l2_sync();
 					gmac_dma_transmit_poll( iMacID );
 				}
 
-//				if( ( EMACreg(Dev, EMAC_DMA_STAT_REG) & EMAC_DMA_STAT_TU ) != 0ul )
-//				{
-//					do {									/* Loop to eliminate possible spurious interrupt*/
-//						EMACreg(Dev, EMAC_DMA_STAT_REG) = EMAC_DMA_STAT_TU;
-//					} while (EMACreg(Dev, EMAC_DMA_STAT_REG) & (EMAC_DMA_STAT_TU));
-//					EMACreg(Dev, EMAC_DMA_TX_POLL_REG) = 0;	/* Resume TX									*/
-//				}
-
-
 				iptraceNETWORK_INTERFACE_TRANSMIT();
 				xReturn = pdPASS;
-				/* Temporary function, will be removed. */
-				//vWaitTxDone();
 			}
 		}
 		else
@@ -871,6 +804,41 @@ BaseType_t xResult = -1;
 	/* Return function status */
 	return xResult;
 }
+/*-----------------------------------------------------------*/
+
+#if( ipconfigUSE_LINKED_RX_MESSAGES != 0 )
+
+static NetworkBufferDescriptor_t *pxFirstPacket = NULL;
+static NetworkBufferDescriptor_t *pxLastPacket = NULL;
+
+static void vPassPackets (void)
+{
+//	if( pxFirstPacket == NULL ) /* has been checked */
+//		return;
+	IPStackEvent_t xRxEvent;
+
+	xRxEvent.eEventType = eNetworkRxEvent;
+	xRxEvent.pvData = ( void * ) pxFirstPacket;
+
+	if( xSendEventStructToIPTask( &xRxEvent, ( portTickType ) 1000 ) != pdPASS )
+	{
+		/* The buffer could not be sent to the stack so
+		must be released again.  This is only an interrupt
+		simulator, not a real interrupt, so it is ok to use
+		the task level function here. */
+		do
+		{
+			NetworkBufferDescriptor_t *pxNext = pxFirstPacket->pxNextBuffer;
+			vReleaseNetworkBufferAndDescriptor( pxFirstPacket );
+			pxFirstPacket = pxNext;
+		} while( pxFirstPacket != NULL );
+		iptraceETHERNET_RX_EVENT_LOST();
+		FreeRTOS_printf( ( "vPassPackets: Can not queue return packet!\n" ) );
+	}
+	pxFirstPacket = NULL;
+	pxLastPacket = NULL;
+}
+#endif
 
 int gmac_check_rx()
 {
@@ -945,20 +913,40 @@ NetworkBufferDescriptor_t *pxNewNetworkBuffer = NULL;
 		if( xAccepted != pdFALSE )
 		{
 			pxCurNetworkBuffer->xDataLength = xReceivedLength;
-			xRxEvent.pvData = ( void * ) pxCurNetworkBuffer;
+			#if( ipconfigUSE_LINKED_RX_MESSAGES != 0 )
+			{
+				// This option increases performance about 7%
+				pxCurNetworkBuffer->pxNextBuffer = NULL;
+				if( pxFirstPacket == NULL )
+				{
+					// Becomes the first message
+					pxFirstPacket = pxCurNetworkBuffer;
+				}
+				else if( pxLastPacket != NULL )
+				{
+					// Add to the tail
+					pxLastPacket->pxNextBuffer = pxCurNetworkBuffer;
+				}
+				pxLastPacket = pxCurNetworkBuffer;
+			}
+			#else
+			{
+				xRxEvent.pvData = ( void * ) pxCurNetworkBuffer;
 
-			/* Pass the data to the TCP/IP task for processing. */
-			if( xSendEventStructToIPTask( &xRxEvent, xDescriptorWaitTime ) == pdFALSE )
-			{
-				/* Could not send the descriptor into the TCP/IP stack, it
-				must be released. */
-				vReleaseNetworkBufferAndDescriptor( pxCurNetworkBuffer );
-				iptraceETHERNET_RX_EVENT_LOST();
+				/* Pass the data to the TCP/IP task for processing. */
+				if( xSendEventStructToIPTask( &xRxEvent, xDescriptorWaitTime ) == pdFALSE )
+				{
+					/* Could not send the descriptor into the TCP/IP stack, it
+					must be released. */
+					vReleaseNetworkBufferAndDescriptor( pxCurNetworkBuffer );
+					iptraceETHERNET_RX_EVENT_LOST();
+				}
+				else
+				{
+					iptraceNETWORK_INTERFACE_RECEIVE();
+				}
 			}
-			else
-			{
-				iptraceNETWORK_INTERFACE_RECEIVE();
-			}
+			#endif /* ipconfigUSE_LINKED_RX_MESSAGES */
 		}
 
 		/* Set Buffer1 address pointer */
@@ -983,6 +971,7 @@ eventLogAdd("RX Recv  %d", (int)(pxRxDescriptor - rxDescriptors));
 		__DSB();
 		if( ( gmac_reg_read( iMacID, DMA_STATUS) & DMA_STATUS_RU ) != 0ul )
 		{
+			/* Receive Buffer Unavailable, send a poll command to resume. */
 			do
 			{
 				gmac_reg_write( iMacID, DMA_STATUS, DMA_STATUS_RU );
@@ -992,17 +981,6 @@ eventLogAdd("RX Recv  %d", (int)(pxRxDescriptor - rxDescriptors));
 			/* Resume DMA transmission*/
 			gmac_dma_reception_poll( iMacID );
 		}
-
-//		/* When Rx Buffer unavailable flag is set clear it and resume
-//		reception. */
-//		if( ( xETH.Instance->DMASR & ETH_DMASR_RBUS ) != 0 )
-//		{
-//			/* Clear RBUS ETHERNET DMA flag. */
-//			xETH.Instance->DMASR = ETH_DMASR_RBUS;
-//
-//			/* Resume DMA reception. */
-//			xETH.Instance->DMARPDR = 0;
-//		}
 	}
 
 	return ( xReceivedLength > 0 );
@@ -1029,7 +1007,8 @@ void emac_show_buffers()
 static void prvEMACHandlerTask( void *pvParameters )
 {
 const TickType_t ulMaxBlockTime = pdMS_TO_TICKS( 500UL );
-uint32_t ulStatus;
+TimeOut_t xPhyTime;
+TickType_t xPhyRemTime;
 
 	/* Remove compiler warnings about unused parameters. */
 	( void ) pvParameters;
@@ -1038,8 +1017,12 @@ uint32_t ulStatus;
 	portTASK_USES_FLOATING_POINT() */
 	iptraceEMAC_TASK_STARTING();
 
+	vTaskSetTimeOutState( &xPhyTime );
+	xPhyRemTime = pdMS_TO_TICKS( PHY_LS_LOW_CHECK_TIME_MS );
+
 	for( ;; )
 	{
+	UBaseType_t uxResult = 0ul;
 		uxCurrentBufferCount = uxGetMinimumFreeNetworkBuffers();
 		if( uxLastMinBufferCount != uxCurrentBufferCount )
 		{
@@ -1085,7 +1068,11 @@ uint32_t ulStatus;
 		if( ( ulISREvents & EMAC_IF_RX_EVENT ) != 0 )
 		{
 			ulISREvents &= ~EMAC_IF_RX_EVENT;
-			while ( gmac_check_rx() > 0 ) {}
+			while ( gmac_check_rx() > 0 ) { uxResult++; }
+			if( pxFirstPacket != NULL )
+			{
+				vPassPackets ();
+			}
 		}
 
 		if( ( ulISREvents & EMAC_IF_TX_EVENT ) != 0 )
@@ -1102,13 +1089,42 @@ uint32_t ulStatus;
 			gmac_check_errors( &xEMACif );
 		}
 
+		if( uxResult != 0ul )
+		{
+			/* A packet was received. No need to check for the PHY status now,
+			but set a timer to check it later on. */
+			vTaskSetTimeOutState( &xPhyTime );
+			xPhyRemTime = pdMS_TO_TICKS( PHY_LS_HIGH_CHECK_TIME_MS );
+		}
+		else if( xTaskCheckForTimeOut( &xPhyTime, &xPhyRemTime ) != pdFALSE )
+		{
+		uint32_t ulStatus;
+			ulStatus = ulReadMDIO( PHY_REG_01_BMSR );
+
+			if( ( ulPHYLinkStatus & niBMSR_LINK_STATUS ) != ( ulStatus & niBMSR_LINK_STATUS ) )
+			{
+				ulPHYLinkStatus = ulStatus;
+				FreeRTOS_printf( ( "prvEMACHandlerTask: PHY LS now %d\n", ( ulPHYLinkStatus & niBMSR_LINK_STATUS ) != 0 ) );
+			}
+
+			vTaskSetTimeOutState( &xPhyTime );
+			if( ( ulPHYLinkStatus & niBMSR_LINK_STATUS ) != 0 )
+			{
+				xPhyRemTime = pdMS_TO_TICKS( PHY_LS_HIGH_CHECK_TIME_MS );
+			}
+			else
+			{
+				xPhyRemTime = pdMS_TO_TICKS( PHY_LS_LOW_CHECK_TIME_MS );
+			}
+		}
+/*
 		ulStatus = ulReadMDIO( PHY_REG_01_BMSR );
 
 		if( ulPHYLinkStatus != ulStatus )
 		{
 		volatile BaseType_t xStartNego = 0;
 
-			/* Test if the Link Status has become high. */
+			// Test if the Link Status has become high.
 			if( ( ( ulPHYLinkStatus ^ ulStatus ) & niBMSR_LINK_STATUS ) && ( ( ulStatus & niBMSR_LINK_STATUS ) != 0 ) )
 			{
 				xStartNego = pdTRUE;
@@ -1127,11 +1143,12 @@ uint32_t ulStatus;
 						//
 					}
 
-					/* Setting the operating speed of the MAC needs a delay. */
+					// Setting the operating speed of the MAC needs a delay.
 					vTaskDelay( pdMS_TO_TICKS( 25UL ) );
 				}
 			}
 		}
+*/
 	}
 }
 /*-----------------------------------------------------------*/
