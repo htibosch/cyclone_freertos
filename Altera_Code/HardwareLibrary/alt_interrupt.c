@@ -416,6 +416,7 @@ ALT_STATUS_CODE alt_int_dist_enable(ALT_INT_INTERRUPT_t int_id)
         uint32_t regoffset   = int_id >> 5;
         uint32_t regbitshift = int_id & 0x1F;
 
+		/* Interrupt Set-Enable Registers */
         alt_write_word(alt_int_base_dist + 0x100 + regoffset * sizeof(uint32_t), 1 << regbitshift); // icdisern
 
         return ALT_E_SUCCESS;
@@ -439,6 +440,7 @@ ALT_STATUS_CODE alt_int_dist_disable(ALT_INT_INTERRUPT_t int_id)
         uint32_t regoffset   = int_id >> 5;
         uint32_t regbitshift = int_id & 0x1F;
 
+		/* Interrupt Clear-Enable Registers */
         alt_write_word(alt_int_base_dist + 0x180 + regoffset * sizeof(uint32_t), 1 << regbitshift); // icdicern
 
         return ALT_E_SUCCESS;

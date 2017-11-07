@@ -549,16 +549,6 @@ BaseType_t xRecvResult;
 							pxControlClient = pxClient;
 							pxClient->bits.bIsControl = pdTRUE_UNSIGNED;
 							pxClient->eTCP_Status = ( eTCP_Server_Status_t ) ( ( ( int ) pxClient->eTCP_Status ) + 1 );
-							// Got Control Socket: rc -1: 'LAPTOP2.1509469629.734853.6127c39e56'
-/*
-	vIPerfTask: Received a connection from 192.168.2.5:2909
-	TCP[ port 2909 ] recv[ 0 ] 37
-	Got Control Socket: rc -1: 'LAPTOP2.1509469629.734853.6127c39e56'
-	TCP[ port 2909 ] recv[ 1 ] 4
-	TCP skipcount 88 xRecvResult 4
-	TCP[ port 2909 ] recv[ 2 ] 88
-	Control string: {"tcp":true,"omit":0,"num":104857600,"parallel":1,"len":131072,"client_version":"3.1.3"}
-*/
 						}
 						else
 						{

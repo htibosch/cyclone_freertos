@@ -738,3 +738,18 @@ uint32_t Phy_Setup( EMACInterface_t *pxEMACif )
 	return 1000;
 }
 
+uint32_t gmac_reg_read( int iMacID, uint32_t ulRegOffset )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+uint32_t ulValue;
+
+	ulValue = readl( ioaddr + ulRegOffset );
+	return ulValue;
+}
+
+void gmac_reg_write( int iMacID, uint32_t ulRegOffset, uint32_t ulValue )
+{
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+
+	writel( ulValue, ioaddr + ulRegOffset );
+}

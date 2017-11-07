@@ -75,15 +75,24 @@
 #include <stdint.h>
 
 #ifndef SIMPLE_MEMCPY
-	#define SIMPLE_MEMCPY	( 0 )
+	#define SIMPLE_MEMCPY		( 0 )
 #endif
 
 #ifndef SIMPLE_MEMSET
-	#define SIMPLE_MEMSET	( 0 )
+	#define SIMPLE_MEMSET		( 0 )
+#endif
+
+#ifndef MEMCPY_USES_LOOP_COUNTER
+	#ifdef __GNUC__
+		/* MEMCPY_USES_LOOP_COUNTER must be defined as 1 in case
+		GCC is being used at optimisation level -O3. */
+		#define MEMCPY_USES_LOOP_COUNTER	( 1 )
+	#else
+		#define MEMCPY_USES_LOOP_COUNTER	( 0 )
+	#endif
 #endif
 
 #if( SIMPLE_MEMCPY != 0 )
-#error Slow copy testing?
 void *memcpy( void *pvDest, const void *pvSource, size_t ulBytes )
 {
 unsigned char *pcDest = ( unsigned char * ) pvDest, *pcSource = ( unsigned char * ) pvSource;
@@ -108,13 +117,8 @@ union xPointer {
 	uint32_t uint32;
 };
 
-#define __MB( pxPointer, field )	\
-	do { \
-		if( ( ( volatile union xPointer * )&pxPointer )->field ) {} \
-	} while( 0 )
-
 #if( SIMPLE_MEMCPY == 0 )
-void *memcpy( void *pvDest, const void *pvSource, size_t ulBytes )
+void *x_memcpy( void *pvDest, const void *pvSource, size_t ulBytes )
 {
 union xPointer pxDestination;
 union xPointer pxSource;
@@ -129,7 +133,7 @@ uint32_t ulAlignBits;
 
 	if( ( ulAlignBits & 0x01 ) == 0 )
 	{
-		if( ( ( ( ( uint32_t ) pxSource.u8 ) & 1 ) != 0 ) && ( pxSource.u8 < pxLastSource.u8 ) )
+		if( ( ( pxSource.uint32 & 1 ) != 0 ) && ( pxSource.u8 < pxLastSource.u8 ) )
 		{
 			*( pxDestination.u8++ ) = *( pxSource.u8++) ;
 		}
@@ -140,11 +144,22 @@ uint32_t ulAlignBits;
 
 			pxLastSource.uint32 &= ~0x01ul;
 
-			while( pxSource.u16 < pxLastSource.u16 )
+			#if( MEMCPY_USES_LOOP_COUNTER != 0 )
 			{
-				*( pxDestination.u16++ ) = *( pxSource.u16++) ;
+				while( ( pxSource.u16 < pxLastSource.u16 ) && ( ulBytes != 0ul ) )
+				{
+					*( pxDestination.u16++ ) = *( pxSource.u16++) ;
+					ulBytes -= 2;
+				}
 			}
-
+			#else
+			{
+				while( pxSource.u16 < pxLastSource.u16 )
+				{
+					*( pxDestination.u16++ ) = *( pxSource.u16++) ;
+				}
+			}
+			#endif
 			pxLastSource.uint32 |= extra;
 		}
 		else
@@ -152,8 +167,7 @@ uint32_t ulAlignBits;
 			int iCount;
 			uint32_t extra;
 
-			__MB( pxSource, u16);
-			if( ( ( ( ( uint32_t ) pxSource.u16 ) & 2 ) != 0 ) && ( ( ( uint8_t * ) pxSource.u16 ) < pxLastSource.u8 - 1 ) )
+			if( ( ( pxSource.uint32 & 2 ) != 0 ) && ( pxSource.u8 < pxLastSource.u8 - 1 ) )
 			{
 				*( pxDestination.u16++ ) = *( pxSource.u16++) ;
 			}
@@ -162,9 +176,6 @@ uint32_t ulAlignBits;
 
 			pxLastSource.uint32 &= ~0x03ul;
 			iCount = pxLastSource.u32 - pxSource.u32;
-
-			__MB( pxSource, u32 );
-			__MB( pxDestination, u32 );
 			while( iCount > 8 )
 			{
 				/* Copy 32 bytes */
@@ -183,11 +194,22 @@ uint32_t ulAlignBits;
 				iCount -= 8;
 			}
 
-			while( pxSource.u32 < pxLastSource.u32 )
+			#if( MEMCPY_USES_LOOP_COUNTER != 0 )
 			{
-				*( pxDestination.u32++ ) = *( pxSource.u32++) ;
+				while( ( pxSource.u32 < pxLastSource.u32 ) && ( ulBytes != 0ul ) )
+				{
+					*( pxDestination.u32++ ) = *( pxSource.u32++) ;
+					ulBytes -= 4;
+				}
 			}
-
+			#else
+			{
+				while( pxSource.u32 < pxLastSource.u32 )
+				{
+					*( pxDestination.u32++ ) = *( pxSource.u32++) ;
+				}
+			}
+			#endif
 			pxLastSource.uint32 |= extra;
 		}
 	}
@@ -212,14 +234,22 @@ uint32_t ulAlignBits;
 			iCount -= 8;
 		}
 	}
-	__MB( pxSource, u8);
-	__MB( pxLastSource, u8);
-	__MB( pxDestination, u8 );
-
-	while( pxSource.u8 < pxLastSource.u8 )
+	#if( MEMCPY_USES_LOOP_COUNTER != 0 )
 	{
-		*( pxDestination.u8++ ) = *( pxSource.u8++ );
+		while( ( pxSource.u8 < pxLastSource.u8 ) && ( ulBytes != 0ul ) )
+		{
+			*( pxDestination.u8++ ) = *( pxSource.u8++ );
+			ulBytes--;
+		}
 	}
+	#else
+	{
+		while( pxSource.u8 < pxLastSource.u8 )
+		{
+			*( pxDestination.u8++ ) = *( pxSource.u8++ );
+		}
+	}
+	#endif
 	return pvDest;
 }
 #endif /* SIMPLE_MEMCPY == 0 */
@@ -244,13 +274,13 @@ size_t x;
 
 
 #if( SIMPLE_MEMSET == 0 )
-void *memset(void *pvDest, int iValue, size_t ulBytes)
+void *x_memset(void *pvDest, int iValue, size_t ulBytes)
 {
 union xPointer pxDestination;
 union xPointer pxLast;
 uint32_t ulPattern;
 
-	pxDestination.u8 = ( unsigned char * ) pvDest;
+	pxDestination.u8 = ( uint8_t * ) pvDest;
 	pxLast.u8 = pxDestination.u8 + ulBytes;
 
 	if( ulBytes >= 8 )
@@ -267,7 +297,7 @@ uint32_t ulPattern;
 			ulAlignBits = 4 - ulAlignBits;
 			while( ulAlignBits-- > 0 )
 			{
-				pxDestination.u8[ 0 ] = ( unsigned char )iValue;
+				pxDestination.u8[ 0 ] = ( uint8_t )iValue;
 				pxDestination.u8++;
 			}
 		}
@@ -276,7 +306,6 @@ uint32_t ulPattern;
 		ulExtra = pxLast.uint32 & 0x03ul;
 
 		pxLast.uint32 &= ~0x03ul;
-		__MB( pxDestination, u32 );
 		iCount = ( int ) ( pxLast.u32 - pxDestination.u32 );
 		while( iCount > 8 )
 		{
@@ -294,22 +323,45 @@ uint32_t ulPattern;
 			iCount -= 8;
 		}
 
-		while( pxDestination.u32 < pxLast.u32 )
+		#if( MEMCPY_USES_LOOP_COUNTER != 0 )
 		{
-			*( pxDestination.u32++ ) = ulPattern;
+			while( ( pxDestination.u32 < pxLast.u32 ) && ( ulBytes != 0ul ) )
+			{
+				pxDestination.u32[0] = ulPattern;
+				pxDestination.u32++;
+				ulBytes += 4;
+			}
 		}
-
+		#else
+		{
+			while( pxDestination.u32 < pxLast.u32 )
+			{
+				pxDestination.u32[0] = ulPattern;
+				pxDestination.u32++;
+			}
+		}
+		#endif
 		pxLast.uint32 |= ulExtra;
 	}
 
-	__MB( pxDestination, u8 );
-	__MB( pxLast, u8 );
-	while( pxDestination.u8 < pxLast.u8 )
+	#if( MEMCPY_USES_LOOP_COUNTER != 0 )
 	{
-		pxDestination.u8[ 0 ] = ( unsigned char ) iValue;
-		pxDestination.u8++;
+		while( ( pxDestination.u8 < pxLast.u8 ) && ( ulBytes != 0ul ) )
+		{
+			pxDestination.u8[ 0 ] = ( uint8_t ) iValue;
+			pxDestination.u8++;
+			ulBytes++;
+		}
 	}
-
+	#else
+	{
+		while( pxDestination.u8 < pxLast.u8 )
+		{
+			pxDestination.u8[ 0 ] = ( uint8_t ) iValue;
+			pxDestination.u8++;
+		}
+	}
+	#endif
 	return pvDest;
 }
 #endif /* SIMPLE_MEMSET -= 0 */

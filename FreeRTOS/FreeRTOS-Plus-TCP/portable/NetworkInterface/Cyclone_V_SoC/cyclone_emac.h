@@ -105,6 +105,7 @@ enum inter_frame_gap {
 #define	GMAC_INT_DISABLE_PCSAN		BIT(2)
 #define	GMAC_INT_DISABLE_PMT		BIT(3)
 #define	GMAC_INT_DISABLE_TIMESTAMP	BIT(9)
+#define	GMAC_INT_DISABLE_LPI		BIT(10)
 #define	GMAC_INT_DISABLE_PCS	(GMAC_INT_DISABLE_RGMII | \
 				 GMAC_INT_DISABLE_PCSLINK | \
 				 GMAC_INT_DISABLE_PCSAN)
@@ -320,7 +321,7 @@ static __inline uint32_t readl( uint8_t *pucAddress )
 
 static __inline void writel( uint32_t ulValue, uint8_t *pucAddress )
 {
-	*( ( volatile uint32_t *) pucAddress ) = ulValue;
+	*( ( volatile uint32_t *) pucAddress ) = ( volatile uint32_t )ulValue;
 }
 
 extern uint32_t ulUsePHYAddress;
@@ -330,5 +331,8 @@ int gmac_mdio_read( int iMacID, int phyaddr, int phyreg);
 int gmac_mdio_write( int iMacID, int phyaddr, int phyreg, uint16_t phydata );
 
 uint32_t Phy_Setup( EMACInterface_t *pxEMACif );
+
+uint32_t gmac_reg_read( int iMacID, uint32_t ulRegOffset );
+void gmac_reg_write( int iMacID, uint32_t ulRegOffset, uint32_t ulValue );
 
 #endif /* CYCLONE_EMAC_H */

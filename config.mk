@@ -81,8 +81,8 @@ INC_PATH += \
 
 C_SRCS += \
 	main.c \
-	LEDs.c \
-	reg_test.c
+	LEDs.c
+#	reg_test.c
 
 C_SRCS += \
 	$(FREERTOS_PATH)/tasks.c \
@@ -152,8 +152,16 @@ ifeq ($(USE_USART),true)
 		$(CUR_PATH)/serial.c
 endif
 
+#DEFS += -D SIMPLE_MEMCPY=1
+#DEFS += -D SIMPLE_MEMSET=1
 C_SRCS += \
-	$(COMMON_UTILS_PATH)/memcpy.c \
+ 	$(COMMON_UTILS_PATH)/memcpy.c
+
+#C_SRCS += \
+#	$(COMMON_UTILS_PATH)/memcpy_simple.c
+
+
+C_SRCS += \
 	$(COMMON_UTILS_PATH)/UDPLoggingPrintf.c \
 	$(COMMON_UTILS_PATH)/printf-stdarg.c
 
@@ -216,7 +224,7 @@ LINKER_SCRIPT=$(CUR_PATH)/cycloneV-dk-ram.ld
 TARGET = RTOSDemo.elf
 
 # Later, use -Os
-OPTIMIZATION = -Os
+OPTIMIZATION = -O3
 # OPTIMIZATION = -O0
 
 #HT Do not use it for now
@@ -229,12 +237,15 @@ C_EXTRA_FLAGS= \
 	-mtune=cortex-a9 \
 	-mcpu=cortex-a9 \
 	-march=armv7-a \
-	-mfpu=neon \
 	-std=c99 \
 	-fno-builtin-memcpy \
 	-fno-builtin-memset \
 	-fdata-sections \
 	-ffunction-sections
+
+#	-mfpu=neon
+
+#	-fno-strict-aliasing
 
 AS_EXTRA_FLAGS= \
 	-mfloat-abi=softfp \

@@ -462,11 +462,15 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 	writel( ulMask, ioaddr + DMA_INTR_ENA );
 }
 
-void gmac_clear_dma_interrupt_status( int iMacID, uint32_t ulMask )
+uint32_t gmac_clear_dma_interrupt_status( int iMacID, uint32_t ulMask )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+uint32_t ulValue;
 	/* Write one's to clear all bits. */
 	writel( ulMask, ioaddr + DMA_STATUS );
+	ulValue = readl( ioaddr + DMA_STATUS );
+
+	return ulValue;
 }
 
 uint32_t gmac_get_dma_interrupt_status( int iMacID, int iClear )

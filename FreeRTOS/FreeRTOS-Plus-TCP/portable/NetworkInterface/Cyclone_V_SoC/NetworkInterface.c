@@ -94,6 +94,8 @@ expansion. */
 
 #include "socal/alt_emac.h"
 
+#include "eventLogging.h"
+
 #define niBMSR_LINK_STATUS         0x0004ul
 
 #ifndef	PHY_LS_HIGH_CHECK_TIME_MS
@@ -123,6 +125,7 @@ FreeRTOSConfig.h as configMINIMAL_STACK_SIZE is a user definable constant. */
 
 #define __DSB()		__asm volatile ( "DSB" )
 
+#define ISR_MASK	( 0xFC01FFFF )
 
 
 /*-----------------------------------------------------------*/
@@ -244,6 +247,7 @@ volatile ALT_RSTMGR_t *pxResetManager;
 SYSMGR_EMACGRP_t * sysmgr_emacgrp;
 volatile DMA_STATUS_REG_t *dma_status_reg;
 volatile DMA_STATUS_REG_t *dma_enable_reg;
+volatile alt_int_cpu_target_t cur_cpu;
 
 BaseType_t xNetworkInterfaceInitialise( void )
 {
@@ -263,9 +267,9 @@ BaseType_t xLinkStatus;
 		dma_status_reg = ( volatile DMA_STATUS_REG_t * ) ( ucFirstIOAddres( iMacID ) + DMA_STATUS );
 		dma_enable_reg = ( volatile DMA_STATUS_REG_t * ) ( ucFirstIOAddres( iMacID ) + DMA_INTR_ENA );
 
-		vTaskDelay( 500ul );
+		vTaskDelay( 10ul );
 		pxResetManager->permodrst.emac1 = 0;
-		vTaskDelay( 500ul );
+		vTaskDelay( 10ul );
 
 		if( xTXDescriptorSemaphore == NULL )
 		{
@@ -294,40 +298,49 @@ alt_cache_l2_sync();
 		gmac_enable_transmission( iMacID, pdTRUE );
 
 		gmac_dma_reception_poll( iMacID );
-		gmac_dma_start_rx( iMacID, 0 );
+//		gmac_dma_start_rx( iMacID, 0 );
 
 		prvGMACWaitLS( xWaitLinkDelay );
 
 // portLOWEST_USABLE_INTERRUPT_PRIORITY << portPRIORITY_SHIFT
 //#define EMAC_INT_PRIOITY		( ( 15u ) << portPRIORITY_SHIFT )
-#define EMAC_INT_PRIOITY		( ( 2u ) << portPRIORITY_SHIFT )
-//#define EMAC_INT_PRIOITY		( 128u )
+//#define EMAC_INT_PRIOITY		( ( 2u ) << portPRIORITY_SHIFT )
+#define EMAC_INT_PRIOITY		( 128u )
 
 
 		vRegisterIRQHandler( ALT_INT_INTERRUPT_EMAC1_IRQ, vEMACInterrupthandler, ( void *)&xEMACif );
 		alt_int_dist_priority_set( ALT_INT_INTERRUPT_EMAC1_IRQ, EMAC_INT_PRIOITY );
 		alt_int_dist_enable( ALT_INT_INTERRUPT_EMAC1_IRQ );
 		alt_int_dist_trigger_set( ALT_INT_INTERRUPT_EMAC1_IRQ, ALT_INT_TRIGGER_AUTODETECT );
-
 		{
-			int index;
-			for (index = 0; index < 1023; index++) {
-				if (index == ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE)
-					continue;
-				vRegisterIRQHandler( index, vEMACInterrupthandler, ( void *)&xEMACif );
-				alt_int_dist_priority_set( index, EMAC_INT_PRIOITY );
-				alt_int_dist_enable( index );
-			}
+			alt_int_dist_target_get( ALT_INT_INTERRUPT_EMAC1_IRQ, &cur_cpu);
+			alt_int_dist_target_set( ALT_INT_INTERRUPT_EMAC1_IRQ, (alt_int_cpu_target_t)0x01);
 		}
+
+//		alt_int_dist_trigger_set( ALT_INT_INTERRUPT_EMAC1_IRQ, ALT_INT_TRIGGER_EDGE );
+
+//		{
+//			int index;
+//			for (index = 0; index < 1023; index++) {
+//				if (index == ALT_INT_INTERRUPT_PPI_TIMER_PRIVATE)
+//					continue;
+//				vRegisterIRQHandler( index, vEMACInterrupthandler, ( void *)&xEMACif );
+//				alt_int_dist_priority_set( index, EMAC_INT_PRIOITY );
+//				alt_int_dist_enable( index );
+//			}
+//		}
 
 		/* Clear EMAC interrupt status. */
 		gmac_clear_emac_interrupt_status( iMacID, 0x0001fffful );
 		/* Clear DMA interrupt status. */
-		gmac_clear_dma_interrupt_status( iMacID, 0x0001fffful );
+		gmac_clear_dma_interrupt_status( iMacID, ISR_MASK );
 		/* Enable all interrupts. */
-		gmac_set_emac_interrupt_enable( iMacID, ( uint32_t )0u );
+
+		gmac_set_emac_interrupt_enable( iMacID, GMAC_INT_DISABLE_TIMESTAMP | GMAC_INT_DISABLE_LPI );
 		//#define DMA_INTR_NORMAL	( DMA_INTR_ENA_NIE | DMA_INTR_ENA_RIE | DMA_INTR_ENA_TIE )
-		gmac_set_dma_interrupt_enable( iMacID, DMA_INTR_NORMAL | DMA_INTR_ABNORMAL );
+		gmac_set_dma_interrupt_enable( iMacID, DMA_INTR_NORMAL );
+
+		gmac_dma_transmit_poll( iMacID );
 
 		/* The deferred interrupt handler task is created at the highest
 		possible priority to ensure the interrupt handler can return directly
@@ -349,20 +362,40 @@ alt_cache_l2_sync();
 }
 /*-----------------------------------------------------------*/
 
+volatile uint32_t ulCheckStatus;
+
 void vEMACInterrupthandler( uint32_t ulICCIAR, void * pvContext )
 {
 static uint32_t ulLastDMAStatus;
 uint32_t ulDMAStatus;
+DMA_STATUS_REG_t reg;
 //uint32_t ulEMACStatus;
 
 	/* Get DMA interrupt status and clear all bits. */
 //	ulEMACStatus = gmac_get_emac_interrupt_status( iMacID, pdTRUE );
 	ulDMAStatus  = gmac_get_dma_interrupt_status( iMacID, pdFALSE );
-//#define DMA_STATUS_RI           0x00000040	/* Receive Interrupt */
-//#define DMA_STATUS_TI           0x00000001	/* Transmit Interrupt */
-
-#define RX_MASK		( DMA_STATUS_RI | DMA_STATUS_RU | DMA_STATUS_OVF )
-#define TX_MASK		( DMA_STATUS_TI | DMA_STATUS_TU | DMA_STATUS_TPS )
+/*
+#define DMA_STATUS_NIS          0x00010000	// Normal Interrupt Summary
+#define DMA_STATUS_AIS          0x00008000	// Abnormal Interrupt Summary
+#define DMA_STATUS_ERI          0x00004000	// Early Receive Interrupt
+#define DMA_STATUS_FBI          0x00002000	// Fatal Bus Error Interrupt
+#define DMA_STATUS_ETI          0x00000400	// Early Transmit Interrupt
+#define DMA_STATUS_RWT          0x00000200	// Receive Watchdog Timeout
+#define DMA_STATUS_RPS          0x00000100	// Receive Process Stopped
+#define DMA_STATUS_RU           0x00000080	// Receive Buffer Unavailable
+#define DMA_STATUS_RI           0x00000040	// Receive Interrupt
+#define DMA_STATUS_UNF          0x00000020	// Transmit Underflow
+#define DMA_STATUS_OVF          0x00000010	// Receive Overflow
+#define DMA_STATUS_TJT          0x00000008	// Transmit Jabber Timeout
+#define DMA_STATUS_TU           0x00000004	// Transmit Buffer Unavailable
+#define DMA_STATUS_TPS          0x00000002	// Transmit Process Stopped
+#define DMA_STATUS_TI           0x00000001	// Transmit Interrupt
+#define DMA_CONTROL_FTF         0x00100000	// Flush transmit FIFO
+*/
+#define RX_MASK		( DMA_STATUS_RI | DMA_STATUS_OVF | DMA_STATUS_ERI )
+#define TX_MASK		( DMA_STATUS_TI | DMA_STATUS_TPS | DMA_INTR_ENA_ETE )
+	reg.ulValue = ulDMAStatus;
+	ulDMAStatus &= ISR_MASK;
 
 	if( ( ( ulDMAStatus & RX_MASK ) == 0 ) && ( pxNextRxDesc != NULL ) && ( pxNextRxDesc->own == 0 ) )
 	{
@@ -371,12 +404,26 @@ uint32_t ulDMAStatus;
 	}
 	if( ( ulDMAStatus & RX_MASK ) != 0 )
 	{
-		eventLogAdd("RX_EVENT %02X", ulDMAStatus & RX_MASK );
+		eventLogAdd("RX_EVENT%s%s %04lX %X %X %X",
+			( ulDMAStatus & DMA_STATUS_RI  ) ? " RI" : "",
+			( ulDMAStatus & DMA_STATUS_OVF ) ? " OVF" : "",
+			ulDMAStatus,
+			reg.rs_recv_state,			/* 17 */
+			reg.ts_xmit_state,			/* 20 */
+			reg.eb_bus_error);			/* 23 */
+
 		ulISREvents |= EMAC_IF_RX_EVENT;
 	}
 	if( ( ulDMAStatus & TX_MASK ) != 0 )
 	{
-		eventLogAdd("TX_EVENT %02X", ulDMAStatus & TX_MASK );
+		eventLogAdd("TX_EVENT%s%s%s %04lX %X %X %X",
+			( ulDMAStatus & DMA_STATUS_TI  ) ? " TI" : "",
+			( ulDMAStatus & DMA_STATUS_TPS ) ? " TPS" : "",
+			( ulDMAStatus & DMA_INTR_ENA_ETE ) ? " ETE" : "",
+			ulDMAStatus,
+			reg.rs_recv_state,			/* 17 */
+			reg.ts_xmit_state,			/* 20 */
+			reg.eb_bus_error);			/* 23 */
 		ulISREvents |= EMAC_IF_TX_EVENT;
 	}
 
@@ -385,15 +432,21 @@ uint32_t ulDMAStatus;
 		xTaskNotifyGive( xEMACTaskHandle );
 //		vTaskNotifyGiveFromISR( xEMACTaskHandle, &xHigherPriorityTaskWoken );
 	}
-	if( ulDMAStatus & ( TX_MASK | RX_MASK ) )
+	if( ulDMAStatus & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) )
 	{
-		gmac_clear_dma_interrupt_status( iMacID, ulDMAStatus & ( TX_MASK | RX_MASK ) );
+	uint32_t ulStatus;
+		ulStatus = gmac_clear_dma_interrupt_status( iMacID, ulDMAStatus & ( TX_MASK | RX_MASK ) ) & ISR_MASK;
+		if( ( ulStatus & DMA_STATUS_NIS ) != 0ul )
+		{
+			ulCheckStatus = gmac_clear_dma_interrupt_status( iMacID, DMA_STATUS_NIS ) & ISR_MASK;
+			eventLogAdd( "NIE: %04lX -> %04lX", ulStatus, ulCheckStatus );
+		}
 	}
 	if( ulLastDMAStatus != ulDMAStatus )
 	{
 		if( ulISREvents == 0ul )
 		{
-			eventLogAdd("TX_RX == %02X", ulDMAStatus & ( TX_MASK | RX_MASK ) );
+			eventLogAdd("TX_RX == %02lX", ulDMAStatus & ISR_MASK );
 		}
 		ulLastDMAStatus = ulDMAStatus;
 	}
@@ -541,9 +594,27 @@ eventLogAdd("TX Send  %d", (int)(pxDmaTxDesc - txDescriptors));
 				__DSB();
 alt_cache_l2_sync();
 
-				gmac_dma_start_tx( iMacID, 0 );
-				/* Resume DMA transmission*/
-				gmac_dma_transmit_poll( iMacID );
+//				gmac_dma_start_tx( iMacID, 0 );
+				if( ( gmac_reg_read( iMacID, DMA_STATUS) & DMA_STATUS_TU ) != 0ul )
+				{
+					do
+					{
+						gmac_reg_write( iMacID, DMA_STATUS, DMA_STATUS_TU );
+					}
+					while( ( gmac_reg_read( iMacID, DMA_STATUS) & DMA_STATUS_TU ) != 0ul );
+
+					/* Resume DMA transmission*/
+					gmac_dma_transmit_poll( iMacID );
+				}
+
+//				if( ( EMACreg(Dev, EMAC_DMA_STAT_REG) & EMAC_DMA_STAT_TU ) != 0ul )
+//				{
+//					do {									/* Loop to eliminate possible spurious interrupt*/
+//						EMACreg(Dev, EMAC_DMA_STAT_REG) = EMAC_DMA_STAT_TU;
+//					} while (EMACreg(Dev, EMAC_DMA_STAT_REG) & (EMAC_DMA_STAT_TU));
+//					EMACreg(Dev, EMAC_DMA_TX_POLL_REG) = 0;	/* Resume TX									*/
+//				}
+
 
 				iptraceNETWORK_INTERFACE_TRANSMIT();
 				xReturn = pdPASS;
@@ -910,9 +981,17 @@ eventLogAdd("RX Recv  %d", (int)(pxRxDescriptor - rxDescriptors));
 
 		/* Ensure completion of memory access */
 		__DSB();
+		if( ( gmac_reg_read( iMacID, DMA_STATUS) & DMA_STATUS_RU ) != 0ul )
+		{
+			do
+			{
+				gmac_reg_write( iMacID, DMA_STATUS, DMA_STATUS_RU );
+			}
+			while( ( gmac_reg_read( iMacID, DMA_STATUS) & DMA_STATUS_RU ) != 0ul );
 
-		/* Resume DMA reception. */
-		gmac_dma_start_rx( iMacID, 0 );
+			/* Resume DMA transmission*/
+			gmac_dma_reception_poll( iMacID );
+		}
 
 //		/* When Rx Buffer unavailable flag is set clear it and resume
 //		reception. */

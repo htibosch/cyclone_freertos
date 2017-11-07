@@ -113,6 +113,8 @@
 
 #include "UDPLoggingPrintf.h"
 
+#include "eventLogging.h"
+
 #if( USE_IPERF != 0 )
 	#include "iperf_task.h"
 #endif
@@ -134,6 +136,10 @@
 /* Define names that will be used for DNS, LLMNR and NBNS searches. */
 #define mainHOST_NAME					"sam4e"
 #define mainDEVICE_NICK_NAME			"sam4expro"
+
+#ifndef ARRAY_SIZE
+	#define ARRAY_SIZE(x)	( BaseType_t )( sizeof( x ) / sizeof( x )[ 0 ] )
+#endif
 
 /*-----------------------------------------------------------*/
 
@@ -225,6 +231,9 @@ volatile uint32_t int_count[ 5 ];
 
 static void show_emac( void );
 void vShowTaskTable( BaseType_t aDoClear );
+
+void memcpy_test(void);
+
 /*-----------------------------------------------------------*/
 
 int main( void )
@@ -351,7 +360,7 @@ extern BaseType_t xPlusTCPStarted;
 						&xSourceAddress, &xSourceAddressLength );
 					if( xCount > 0 )
 					{
-						eventLogAdd("Ether INPUT %d", xCount);
+						eventLogAdd("Ether INPUT %ld", xCount);
 					}
 				}
 
@@ -410,6 +419,10 @@ extern BaseType_t xPlusTCPStarted;
 					alt_freq_t ulCurFreq;
 						alt_clk_freq_get( ALT_CLK_MPU_PERIPH, &ulCurFreq );
 						lUDPLoggingPrintf( "MPU freq %lu Mhz ( now %lu MHz )\n", ulMPUFrequency / 1000000ul, ulCurFreq / 1000000ul );
+					}
+					if( strncmp( cBuffer, "memtest", 7 ) == 0 )
+					{
+						memcpy_test ();
 					}
 					if( strncmp( cBuffer, "ints", 4 ) == 0 )
 					{
@@ -1217,3 +1230,125 @@ char *getTaskName()
 	return pcTaskGetName( ( TaskHandle_t ) NULL );
 }
 
+#define MEMCPY_BLOCK_SIZE		0x10000
+#define MEMCPY_EXTA_SIZE		128
+
+struct SMEmcpyData {
+	char target_pre [ MEMCPY_EXTA_SIZE  ];
+	char target_data[ MEMCPY_BLOCK_SIZE + 16 ];
+	char target_post[ MEMCPY_EXTA_SIZE  ];
+
+	char source_pre [ MEMCPY_EXTA_SIZE  ];
+	char source_data[ MEMCPY_BLOCK_SIZE + 16 ];
+	char source_post[ MEMCPY_EXTA_SIZE  ];
+};
+
+typedef void * ( * FMemcpy ) ( void *pvDest, const void *pvSource, size_t ulBytes );
+typedef void * ( * FMemset ) ( void *pvDest, int iChar, size_t ulBytes );
+
+void *x_memcpy( void *pvDest, const void *pvSource, size_t ulBytes );
+void *x_memset(void *pvDest, int iValue, size_t ulBytes);
+
+#define 	LOOP_COUNT		100
+
+void memcpy_test()
+{
+int target_offset;
+int source_offset;
+int algorithm;
+struct SMEmcpyData *pxBlock;
+char *target;
+char *source;
+uint64_t ullStartTime;
+uint32_t ulDelta;
+uint32_t ulTimes[ 2 ][ 4 ][ 4 ];
+uint32_t ulSetTimes[ 2 ][ 4 ];
+int time_index = 0;
+int index;
+uint64_t copy_size = LOOP_COUNT * MEMCPY_BLOCK_SIZE;
+
+	memset( ulTimes, '\0', sizeof ulTimes );
+	
+	pxBlock = ( struct SMEmcpyData * ) pvPortMalloc( sizeof *pxBlock );
+	if( pxBlock == NULL )
+	{
+		logPrintf( "Failed to allocate %lu bytes\n", sizeof *pxBlock );
+		return;
+	}
+	FMemcpy memcpy_func;
+	for( algorithm = 0; algorithm < 2; algorithm++ )
+	{
+		memcpy_func = algorithm == 0 ? memcpy : x_memcpy;
+		for( target_offset = 0; target_offset < 4; target_offset++ ) {
+			for( source_offset = 0; source_offset < 4; source_offset++ ) {
+				target = pxBlock->target_data + target_offset;
+				source = pxBlock->source_data + source_offset;
+				ullStartTime = ullGetHighResolutionTime();
+				for( index = 0; index < LOOP_COUNT; index++ )
+				{
+					memcpy_func( target, source, MEMCPY_BLOCK_SIZE );
+				}
+				ulDelta = ( uint32_t ) ( ullGetHighResolutionTime() - ullStartTime );
+				ulTimes[ algorithm ][ target_offset ][ source_offset ] = ulDelta;
+			}
+		}
+	}
+	FMemset memset_func;
+	for( algorithm = 0; algorithm < 2; algorithm++ )
+	{
+		memset_func = algorithm == 0 ? memset : x_memset;
+		for( target_offset = 0; target_offset < 4; target_offset++ ) {
+			target = pxBlock->target_data + target_offset;
+			ullStartTime = ullGetHighResolutionTime();
+			for( index = 0; index < LOOP_COUNT; index++ )
+			{
+				memset_func( target, '\xff', MEMCPY_BLOCK_SIZE );
+			}
+			ulDelta = ( uint32_t ) ( ullGetHighResolutionTime() - ullStartTime );
+			ulSetTimes[ algorithm ][ target_offset ] = ulDelta;
+		}
+	}
+	logPrintf( "copy_size - %lu ( %lu bits)\n",
+		( uint32_t )copy_size, ( uint32_t )(8ull * copy_size) );
+	for( target_offset = 0; target_offset < 4; target_offset++ )
+	{
+		for( source_offset = 0; source_offset < 4; source_offset++ )
+		{
+			uint32_t ulTime1 = ulTimes[ 0 ][ target_offset ][ source_offset ];
+			uint32_t ulTime2 = ulTimes[ 1 ][ target_offset ][ source_offset ];
+
+			uint64_t avg1 = ( copy_size * 1000000ull ) / ulTime1;
+			uint64_t avg2 = ( copy_size * 1000000ull ) / ulTime2;
+
+			uint32_t mb1 = ( uint32_t ) ( ( avg1 + 500000ull ) / 1000000ull );
+			uint32_t mb2 = ( uint32_t ) ( ( avg2 + 500000ull ) / 1000000ull );
+
+			logPrintf( "Offset[%d,%d] = memcpy %3lu.%03lu ms (%5lu MB/s) x_memcpy %3lu.%03lu ms  (%5lu MB/s)\n",
+				target_offset,
+				source_offset,
+				ulTime1 / 1000ul, ulTime1 % 1000ul,
+				mb1,
+				ulTime2 / 1000ul, ulTime2 % 1000ul,
+				mb2);
+		}
+	}
+	for( target_offset = 0; target_offset < 4; target_offset++ )
+	{
+		uint32_t ulTime1 = ulSetTimes[ 0 ][ target_offset ];
+		uint32_t ulTime2 = ulSetTimes[ 1 ][ target_offset ];
+
+		uint64_t avg1 = ( copy_size * 1000000ull ) / ulTime1;
+		uint64_t avg2 = ( copy_size * 1000000ull ) / ulTime2;
+
+		uint32_t mb1 = ( uint32_t ) ( ( avg1 + 500000ull ) / 1000000ull );
+		uint32_t mb2 = ( uint32_t ) ( ( avg2 + 500000ull ) / 1000000ull );
+
+		logPrintf( "Offset[%d] = memset %3lu.%03lu ms (%5lu MB/s) x_memset %3lu.%03lu ms  (%5lu MB/s)\n",
+			target_offset,
+			ulTime1 / 1000ul, ulTime1 % 1000ul,
+			mb1,
+			ulTime2 / 1000ul, ulTime2 % 1000ul,
+			mb2);
+	}
+	vPortFree( ( void * ) pxBlock );
+}

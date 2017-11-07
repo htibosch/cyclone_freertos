@@ -327,4 +327,6 @@ logging as e.g.:
 If not defined, the local broadcast address will be used, e.g. 192.168.0.255
 */
 
+#define configUSE_TASK_FPU_SUPPORT    2
+
 #endif /* FREERTOS_CONFIG_H */
