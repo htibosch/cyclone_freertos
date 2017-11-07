@@ -87,6 +87,7 @@
 #include "FreeRTOS_ARP.h"
 #include "FreeRTOS_TCP_WIN.h"
 
+#include "eventLogging.h"
 
 /* Just make sure the contents doesn't get compiled if TCP is not enabled. */
 #if ipconfigUSE_TCP == 1
@@ -2681,17 +2682,22 @@ int32_t lRxSpace;
 
 			*ppxNetworkBuffer = NULL;
 			xSendLength = 0;
+eventLogAdd("TX del ACK %u", pxSocket->u.xTCP.usTimeout);
 		}
-		else if( pxSocket->u.xTCP.pxAckMessage != NULL )
+		else 
 		{
-			/* As an ACK is not being delayed, remove any earlier delayed ACK
-			message. */
-			if( pxSocket->u.xTCP.pxAckMessage != *ppxNetworkBuffer )
+			eventLogAdd("TX imm ACK %s", pxSocket->u.xTCP.pxAckMessage != NULL ? "rep" : "new");
+			if( pxSocket->u.xTCP.pxAckMessage != NULL )
 			{
-				vReleaseNetworkBufferAndDescriptor( pxSocket->u.xTCP.pxAckMessage );
-			}
+				/* As an ACK is not being delayed, remove any earlier delayed ACK
+				message. */
+				if( pxSocket->u.xTCP.pxAckMessage != *ppxNetworkBuffer )
+				{
+					vReleaseNetworkBufferAndDescriptor( pxSocket->u.xTCP.pxAckMessage );
+				}
 
-			pxSocket->u.xTCP.pxAckMessage = NULL;
+				pxSocket->u.xTCP.pxAckMessage = NULL;
+			}
 		}
 	}
 	#else

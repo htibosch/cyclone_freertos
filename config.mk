@@ -13,12 +13,11 @@ include user.mk
 
 MY_BOARD=CYCLONE_V_SOC_DE10
 
-# C:\intelFPGA_pro\17.0\embedded\host_tools\mentor\gnu\arm\baremetal\bin
-# GCC_BIN=C:\PROGRA~2\Atmel\ATMELT~1\ARMGCC~1\Native\4.8.1443\ARM-GN~1\bin
-# GCC_PREFIX=arm-none-eabi
+# Example contents of user.mk :
+# GCC_BIN=C:/intelFPGA_pro/17.0/embedded/host_tools/mentor/gnu/arm/baremetal/bin
+# GCC_PREFIX=arm-altera-eabi
 
-GCC_BIN ?= C:/intelFPGA_pro/17.0/embedded/host_tools/mentor/gnu/arm/baremetal/bin
-GCC_PREFIX=arm-altera-eabi
+include user.mk
 
 USE_TICKLESS_IDLE = false
 USE_MICREL_KSZ8851 ?= false
@@ -177,7 +176,7 @@ C_SRCS += \
 ifeq ($(USE_LOG_EVENT),true)
 	DEFS += -D USE_LOG_EVENT=1
 	DEFS += -D LOG_EVENT_NAME_LEN=32
-	DEFS += -D LOG_EVENT_COUNT=128
+	DEFS += -D LOG_EVENT_COUNT=256
 	C_SRCS += \
 		$(UTILITIES_PATH)/eventLogging.c
 else

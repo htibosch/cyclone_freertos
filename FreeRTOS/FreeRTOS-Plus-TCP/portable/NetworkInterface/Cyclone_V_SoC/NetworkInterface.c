@@ -417,23 +417,36 @@ BaseType_t xHigherPriorityTaskWoken = 0ul;
 	}
 	if( ulDMAStatus & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) )
 	{
-	uint32_t ulStatus;
-
-		ulStatus = gmac_clear_dma_interrupt_status( iMacID, ulDMAStatus & ( TX_MASK | RX_MASK ) ) & ISR_MASK;
-		if( ( ulStatus & DMA_STATUS_NIS ) != 0ul )
+	uint32_t ulmask;
+		ulmask = gmac_clear_dma_interrupt_status( iMacID, ulDMAStatus & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) ) & ( TX_MASK | RX_MASK | DMA_STATUS_NIS );
+		if( ulmask != 0ul)
 		{
-			ulCheckStatus = gmac_clear_dma_interrupt_status( iMacID, DMA_STATUS_NIS ) & ISR_MASK;
-			eventLogAdd( "NIE: %04lX -> %04lX", ulStatus, ulCheckStatus );
+			ulmask = gmac_clear_dma_interrupt_status( iMacID, ulmask & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) ) & ( TX_MASK | RX_MASK | DMA_STATUS_NIS );
+			if( ulmask != 0ul)
+			{
+				ulmask = gmac_clear_dma_interrupt_status( iMacID, ulmask & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) ) & ( TX_MASK | RX_MASK | DMA_STATUS_NIS );
+			}
 		}
 	}
-	if( ulLastDMAStatus != ulDMAStatus )
-	{
-		if( ulISREvents == 0ul )
-		{
-			eventLogAdd("TX_RX == %02lX", ulDMAStatus & ISR_MASK );
-		}
-		ulLastDMAStatus = ulDMAStatus;
-	}
+//	if( ulDMAStatus & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) )
+//	{
+//	uint32_t ulStatus;
+//
+//		ulStatus = gmac_clear_dma_interrupt_status( iMacID, ulDMAStatus & ( TX_MASK | RX_MASK ) ) & ISR_MASK;
+//		if( ( ulStatus & DMA_STATUS_NIS ) != 0ul )
+//		{
+//			ulCheckStatus = gmac_clear_dma_interrupt_status( iMacID, DMA_STATUS_NIS ) & ISR_MASK;
+//			eventLogAdd( "NIE: %04lX -> %04lX", ulStatus, ulCheckStatus );
+//		}
+//	}
+//	if( ulLastDMAStatus != ulDMAStatus )
+//	{
+//		if( ulISREvents == 0ul )
+//		{
+//			eventLogAdd("TX_RX == %02lX", ulDMAStatus & ISR_MASK );
+//		}
+//		ulLastDMAStatus = ulDMAStatus;
+//	}
 
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 }
@@ -530,7 +543,7 @@ const TickType_t xBlockTimeTicks = pdMS_TO_TICKS( 200u );
 				pxDmaTxDesc->buf1_byte_count = ulTransmitSize;
 				/* Set Own bit of the Tx descriptor Status: gives the buffer back to ETHERNET DMA */
 				pxDmaTxDesc->own = 1;
-eventLogAdd("TX Send  %d", (int)(pxDmaTxDesc - txDescriptors));
+eventLogAdd("TX Send  %d (%lu)", (int)(pxDmaTxDesc - txDescriptors), ulTransmitSize);
 				/* Point to next descriptor */
 				pxNextTxDesc = ( gmac_tx_descriptor_t * ) ( pxNextTxDesc->next_descriptor );
 				/* Ensure completion of memory access */
@@ -953,7 +966,7 @@ NetworkBufferDescriptor_t *pxNewNetworkBuffer = NULL;
 		if( pxNewNetworkBuffer != NULL )
 		{
 			pxRxDescriptor->buf1_address = (uint32_t)pxNewNetworkBuffer->pucEthernetBuffer;
-eventLogAdd("RX Recv  %d", (int)(pxRxDescriptor - rxDescriptors));
+eventLogAdd("RX Recv  %d (%lu)", (int)(pxRxDescriptor - rxDescriptors), xReceivedLength);
 		}
 		else
 		{
@@ -1069,10 +1082,14 @@ TickType_t xPhyRemTime;
 		{
 			ulISREvents &= ~EMAC_IF_RX_EVENT;
 			while ( gmac_check_rx() > 0 ) { uxResult++; }
-			if( pxFirstPacket != NULL )
+			#if( ipconfigUSE_LINKED_RX_MESSAGES != 0 )
 			{
-				vPassPackets ();
+				if( pxFirstPacket != NULL )
+				{
+					vPassPackets();
+				}
 			}
+			#endif
 		}
 
 		if( ( ulISREvents & EMAC_IF_TX_EVENT ) != 0 )
@@ -1117,38 +1134,6 @@ TickType_t xPhyRemTime;
 				xPhyRemTime = pdMS_TO_TICKS( PHY_LS_LOW_CHECK_TIME_MS );
 			}
 		}
-/*
-		ulStatus = ulReadMDIO( PHY_REG_01_BMSR );
-
-		if( ulPHYLinkStatus != ulStatus )
-		{
-		volatile BaseType_t xStartNego = 0;
-
-			// Test if the Link Status has become high.
-			if( ( ( ulPHYLinkStatus ^ ulStatus ) & niBMSR_LINK_STATUS ) && ( ( ulStatus & niBMSR_LINK_STATUS ) != 0 ) )
-			{
-				xStartNego = pdTRUE;
-			}
-
-			if( ulPHYLinkStatus != ulStatus )
-			{
-				ulPHYLinkStatus = ulStatus;
-				FreeRTOS_printf( ( "prvEMACHandlerTask: PHY LS now %d Start nego %d\n", ( ulPHYLinkStatus & niBMSR_LINK_STATUS ) != 0, xStartNego ) );
-				if( xStartNego )
-				{
-				uint32_t ulLinkSpeed;
-					ulLinkSpeed = Phy_Setup( &xEMACif );
-					if( ulLinkSpeed )
-					{
-						//
-					}
-
-					// Setting the operating speed of the MAC needs a delay.
-					vTaskDelay( pdMS_TO_TICKS( 25UL ) );
-				}
-			}
-		}
-*/
 	}
 }
 /*-----------------------------------------------------------*/

@@ -246,7 +246,7 @@ to a pre-determinable value. */
 
 /* Optimisation that allows more than one Rx buffer to be passed to the TCP task
 at a time - requires driver support. */
-#define ipconfigUSE_LINKED_RX_MESSAGES				( 1 )
+#define ipconfigUSE_LINKED_RX_MESSAGES				( 0 )
 
 #define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS		( 40 )
 

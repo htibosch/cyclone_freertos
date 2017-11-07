@@ -5,7 +5,6 @@
 *.slo
 *.o
 *.ko
-*.d
 *.m
 *.obj
 
@@ -39,7 +38,6 @@
 *.H88
 *.asm
 *.lst
-*.map
 *.il?
 *.bin
 *.tds
@@ -67,7 +65,6 @@
 *.lng
 *.i*86
 *.x86_64
-*.hex
 
 # Debug files
 *.dSYM/
@@ -84,3 +81,4 @@ Module.symvers
 Mkfile.old
 dkms.conf
 /Debug/
+/user.mk

@@ -43,6 +43,8 @@
 
 #include "iperf_task.h"
 
+#include "eventLogging.h"
+
 #define ipconfigIPERF_DUAL_TCP	0
 
 /* Put the TCP server at this port number: */
@@ -504,6 +506,8 @@ BaseType_t xRecvResult;
 				BaseType_t xRemaining = xRecvResult;
 				#endif
 				pxClient->ulRecvCount += xRecvResult;
+eventLogAdd("iperf RX %lu", xRecvResult);
+
 				#if( ipconfigIPERF_DOES_ECHO_TCP != 0 )
 				{
 					FreeRTOS_send( pxClient->xServerSocket, (const void *)pcRecvBuffer, xRecvResult, 0 );

@@ -190,7 +190,7 @@ ullLastTime = xEventLogs.events[index].ullTimestamp;
 		//if ((i % 8) == 0)
 			vUDPLoggingFlush();
 	}
-
+	vTaskDelay( 200 );
 	vEventLogClear ();
 }
 
