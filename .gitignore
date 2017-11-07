@@ -81,3 +81,4 @@ Module.symvers
 Mkfile.old
 dkms.conf
 /Debug/
+/user_config.mk

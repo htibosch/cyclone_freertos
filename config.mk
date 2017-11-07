@@ -4,20 +4,20 @@
 #
 #==============================================================================
 
-# The file "user.mk" is excluded from GIT.
+# The file "user_config.mk" is excluded from GIT.
 # It should define "GCC_BIN", which is the location of the compiler
 # and linker.
 
-include user.mk
+include user_config.mk
 
 
 MY_BOARD=CYCLONE_V_SOC_DE10
 
-# Example contents of user.mk :
+# Example contents of user_config.mk :
 # GCC_BIN=C:/intelFPGA_pro/17.0/embedded/host_tools/mentor/gnu/arm/baremetal/bin
 # GCC_PREFIX=arm-altera-eabi
 
-include user.mk
+include user_config.mk
 
 USE_TICKLESS_IDLE = false
 USE_MICREL_KSZ8851 ?= false
