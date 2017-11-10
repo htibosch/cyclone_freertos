@@ -242,7 +242,7 @@ to ensure the total amount of RAM that can be consumed by the IP stack is capped
 to a pre-determinable value. */
 
 #define GMAC_TX_BUFFERS			4
-#define GMAC_RX_BUFFERS			12
+#define GMAC_RX_BUFFERS			14
 
 /* Optimisation that allows more than one Rx buffer to be passed to the TCP task
 at a time - requires driver support. */
@@ -376,16 +376,17 @@ server task. */
 #define ipconfigNETWORK_BUFFER_DEBUG			0
 #define	ipconfigTCP_IP_SANITY					0
 
-#define ipconfigIPERF_TX_BUFSIZE    ( 12 * ipconfigTCP_MSS )	/* Units of bytes. */
-#define ipconfigIPERF_TX_WINSIZE	( 8 )			/* Size in units of MSS */
-#define ipconfigIPERF_RX_BUFSIZE	( 12 * ipconfigTCP_MSS )	/* Units of bytes. */
-#define ipconfigIPERF_RX_WINSIZE	( 8 )			/* Size in units of MSS */
+#define ipconfigIPERF_TX_BUFSIZE    ( 20 * ipconfigTCP_MSS )	/* Units of bytes. */
+#define ipconfigIPERF_TX_WINSIZE	( 10 )			/* Size in units of MSS */
+#define ipconfigIPERF_RX_BUFSIZE	( 20 * ipconfigTCP_MSS )	/* Units of bytes. */
+#define ipconfigIPERF_RX_WINSIZE	( 10 )			/* Size in units of MSS */
 
 // #define ipconfigIPERF_TX_BUFSIZE    ( 4 * ipconfigTCP_MSS )	/* Units of bytes. */
 // #define ipconfigIPERF_TX_WINSIZE	( 2 )			/* Size in units of MSS */
 // #define ipconfigIPERF_RX_BUFSIZE	( 4 * ipconfigTCP_MSS )	/* Units of bytes. */
 // #define ipconfigIPERF_RX_WINSIZE	( 2 )			/* Size in units of MSS */
 
+#define ipconfigIPERF_RECV_BUFFER_SIZE		( ipconfigIPERF_RX_BUFSIZE )
 
 #define ipconfigTCP_FILE_BUFFER_SIZE		( 8 * ipconfigTCP_MSS )
 
@@ -463,6 +464,8 @@ messages. */
 #define ipconfigSOCKET_HAS_USER_SEMAPHORE			1
 
 #define ipconfigENDPOINT_DNS_ADDRESS_COUNT		( 2 )
+
+//#define ipconfigETHERNET_MINIMUM_PACKET_BYTES	( 64 )
 
 #ifdef __cplusplus
 } /* extern "C" */

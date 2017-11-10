@@ -81,7 +81,6 @@ expansion. */
 #define EMAC_IF_ERR_EVENT       4UL
 #define EMAC_IF_ALL_EVENT       ( EMAC_IF_RX_EVENT | EMAC_IF_TX_EVENT | EMAC_IF_ERR_EVENT )
 
-
 #include "socal/hps.h"
 #include "socal/alt_rstmgr.h"
 #include "alt_cache.h"
@@ -95,6 +94,9 @@ expansion. */
 #include "socal/alt_emac.h"
 
 #include "eventLogging.h"
+
+#define NETWORK_BUFFERS_CACHED	1
+#define NETWORK_BUFFER_HEADER_SIZE	( ipconfigPACKET_FILLER_SIZE + 8 )
 
 #define niBMSR_LINK_STATUS         0x0004ul
 
@@ -127,6 +129,7 @@ FreeRTOSConfig.h as configMINIMAL_STACK_SIZE is a user definable constant. */
 
 #define ISR_MASK	( 0xFC01FFFF )
 
+#define NETWORK_BUFFER_SIZE	1536
 
 /*-----------------------------------------------------------*/
 
@@ -168,6 +171,14 @@ static int iMacID = 1;
 
 __attribute__ ( ( aligned( 64 ) ) ) __attribute__ ((section (".oc_ram"))) gmac_tx_descriptor_t txDescriptors[ GMAC_TX_BUFFERS ];
 __attribute__ ( ( aligned( 64 ) ) ) __attribute__ ((section (".oc_ram"))) gmac_rx_descriptor_t rxDescriptors[ GMAC_RX_BUFFERS ];
+
+#if( NETWORK_BUFFERS_CACHED )
+	static uint8_t __attribute__ ( ( aligned( 32 ) ) )
+		ucNetworkPackets[ ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS * NETWORK_BUFFER_SIZE ] ;
+#else
+	static uint8_t __attribute__ ( ( aligned( 32 ) ) ) __attribute__ ((section (".oc_ram")))
+		ucNetworkPackets[ ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS * NETWORK_BUFFER_SIZE ] ;
+#endif
 
 static gmac_tx_descriptor_t *pxNextTxDesc = txDescriptors;
 static gmac_tx_descriptor_t *DMATxDescToClear = txDescriptors;
@@ -317,11 +328,20 @@ alt_cache_l2_sync();
 		gmac_clear_dma_interrupt_status( iMacID, ISR_MASK );
 		/* Enable all interrupts. */
 
-		gmac_set_emac_interrupt_enable( iMacID, GMAC_INT_DISABLE_TIMESTAMP | GMAC_INT_DISABLE_LPI );
+		gmac_set_emac_interrupt_disable( iMacID, GMAC_INT_DISABLE_TIMESTAMP | GMAC_INT_DISABLE_LPI );
 		//#define DMA_INTR_NORMAL	( DMA_INTR_ENA_NIE | DMA_INTR_ENA_RIE | DMA_INTR_ENA_TIE )
 		gmac_set_dma_interrupt_enable( iMacID, DMA_INTR_NORMAL );
 
 		gmac_dma_transmit_poll( iMacID );
+		#if( NETWORK_BUFFERS_CACHED != 0 )
+		{
+			/* Purge: A term used in this API as a short form for clean and invalidate.
+			 * This operation cleans and invalidates a cache line in that order, as a
+			 * single command to the cache controller.
+			 */
+			alt_cache_system_purge( ucNetworkPackets, sizeof( ucNetworkPackets ) );
+		}
+		#endif
 
 		/* The deferred interrupt handler task is created at the highest
 		possible priority to ensure the interrupt handler can return directly
@@ -359,6 +379,11 @@ BaseType_t xHigherPriorityTaskWoken = 0ul;
 //	ulEMACStatus = gmac_get_emac_interrupt_status( iMacID, pdTRUE );
 	ulDMAStatus  = gmac_get_dma_interrupt_status( iMacID, pdFALSE );
 /*
+#define DMA_STATUS_GLPII        0x40000000	// GMAC LPI interrupt
+#define DMA_STATUS_GPI          0x10000000	// PMT interrupt
+#define DMA_STATUS_GMI          0x08000000	// MMC interrupt
+#define DMA_STATUS_GLI          0x04000000	// GMAC Line interface int
+
 #define DMA_STATUS_NIS          0x00010000	// Normal Interrupt Summary
 #define DMA_STATUS_AIS          0x00008000	// Abnormal Interrupt Summary
 #define DMA_STATUS_ERI          0x00004000	// Early Receive Interrupt
@@ -375,6 +400,11 @@ BaseType_t xHigherPriorityTaskWoken = 0ul;
 #define DMA_STATUS_TPS          0x00000002	// Transmit Process Stopped
 #define DMA_STATUS_TI           0x00000001	// Transmit Interrupt
 #define DMA_CONTROL_FTF         0x00100000	// Flush transmit FIFO
+
+                                0x08000084
+										 Transmit Buffer Unavailable ( DMA_STATUS_TU )
+                                        Receive Buffer Unavailable ( DMA_STATUS_RU )
+								   MMC interrupt ( DMA_STATUS_GMI )
 */
 #define RX_MASK		( DMA_STATUS_RI | DMA_STATUS_OVF | DMA_STATUS_ERI )
 #define TX_MASK		( DMA_STATUS_TI | DMA_STATUS_TPS | DMA_INTR_ENA_ETE )
@@ -541,6 +571,14 @@ const TickType_t xBlockTimeTicks = pdMS_TO_TICKS( 200u );
 
 				/* Set frame size */
 				pxDmaTxDesc->buf1_byte_count = ulTransmitSize;
+				#if( NETWORK_BUFFERS_CACHED	!= 0 )
+				{
+				BaseType_t xlength = ALT_CACHE_LINE_SIZE * ( ( ulTransmitSize + NETWORK_BUFFER_HEADER_SIZE + ALT_CACHE_LINE_SIZE - 1 ) / ALT_CACHE_LINE_SIZE );
+//					alt_cache_system_clean( pxDescriptor->pucEthernetBuffer - NETWORK_BUFFER_HEADER_SIZE, xlength );
+					alt_cache_system_purge( pxDescriptor->pucEthernetBuffer - NETWORK_BUFFER_HEADER_SIZE, xlength );
+				}
+				#endif
+
 				/* Set Own bit of the Tx descriptor Status: gives the buffer back to ETHERNET DMA */
 				pxDmaTxDesc->own = 1;
 eventLogAdd("TX Send  %d (%lu)", (int)(pxDmaTxDesc - txDescriptors), ulTransmitSize);
@@ -548,7 +586,7 @@ eventLogAdd("TX Send  %d (%lu)", (int)(pxDmaTxDesc - txDescriptors), ulTransmitS
 				pxNextTxDesc = ( gmac_tx_descriptor_t * ) ( pxNextTxDesc->next_descriptor );
 				/* Ensure completion of memory access */
 				__DSB();
-alt_cache_l2_sync();
+//alt_cache_l2_sync();
 
 //				gmac_dma_start_tx( iMacID, 0 );
 				if( ( gmac_reg_read( iMacID, DMA_STATUS) & DMA_STATUS_TU ) != 0ul )
@@ -629,12 +667,8 @@ BaseType_t xReturn;
 }
 /*-----------------------------------------------------------*/
 
-#define NETWORK_BUFFER_SIZE	1536
 void vNetworkInterfaceAllocateRAMToBuffers( NetworkBufferDescriptor_t pxNetworkBuffers[ ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS ] )
 {
-static uint8_t __attribute__ ( ( aligned( 32 ) ) ) __attribute__ ((section (".oc_ram")))
-	ucNetworkPackets[ ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS * NETWORK_BUFFER_SIZE ] ;
-
 uint8_t *ucRAMBuffer = ucNetworkPackets;
 uint32_t ul;
 
@@ -904,6 +938,24 @@ NetworkBufferDescriptor_t *pxNewNetworkBuffer = NULL;
 				xAccepted = pdFALSE;
 			}
 		}
+
+		#if( NETWORK_BUFFERS_CACHED	!= 0 )
+		{
+			if( pucBuffer != NULL )
+			{
+			BaseType_t xlength = ALT_CACHE_LINE_SIZE * ( ( xReceivedLength + NETWORK_BUFFER_HEADER_SIZE + ALT_CACHE_LINE_SIZE - 1 ) / ALT_CACHE_LINE_SIZE );
+			uint32_t *ptr = ( uint32_t * )( pucBuffer - NETWORK_BUFFER_HEADER_SIZE );
+			uint32_t ulStore[ 2 ];
+
+				ulStore[ 0 ] = ptr[ 0 ];
+				ulStore[ 1 ] = ptr[ 1 ];
+				alt_cache_system_invalidate( pucBuffer - NETWORK_BUFFER_HEADER_SIZE, xlength );
+				ptr[ 0 ] = ulStore[ 0 ];
+				ptr[ 1 ] = ulStore[ 1 ];
+			}
+		}
+		#endif
+
 		#if( ipconfigZERO_COPY_RX_DRIVER != 0 )
 		{
 			/* Find out which Network Buffer was originally passed to the descriptor. */

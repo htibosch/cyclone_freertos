@@ -54,13 +54,18 @@ int iEventLogInit()
 	return xEventLogs.initOk;
 }
 
-void vEventLogClear ()
+int iEventLogClear ()
 {
-	if (!iEventLogInit ())
-		return;
-	xEventLogs.writeIndex = 0;
-	xEventLogs.wrapped = pdFALSE;
-	xEventLogs.onhold = pdFALSE;
+int rc;
+	if (!iEventLogInit ()) {
+		rc = 0;
+	} else {
+		rc = xEventLogs.writeIndex;
+		xEventLogs.writeIndex = 0;
+		xEventLogs.wrapped = pdFALSE;
+		xEventLogs.onhold = pdFALSE;
+	}
+	return rc;
 }
 
 #include "hr_gettime.h"
@@ -150,10 +155,10 @@ ullLastTime = xEventLogs.events[index].ullTimestamp;
 
 		pxEvent = xEventLogs.events + index;
 		delta = ( unsigned ) ( pxEvent->ullTimestamp - ullLastTime );
-#if( __SAM4E16E__ ) || ( CPU_ZYNQ == 1 )
+
 		if (delta > 0xFFFF0000)
 			delta = ~0u - delta;
-#endif
+
 		secs = delta / cpuTicksSec;
 		delta %= cpuTicksSec;
 		msec = delta / cpuTicksMs;
@@ -191,7 +196,7 @@ ullLastTime = xEventLogs.events[index].ullTimestamp;
 			vUDPLoggingFlush();
 	}
 	vTaskDelay( 200 );
-	vEventLogClear ();
+	iEventLogClear ();
 }
 
 #endif /* USE_LOG_EVENT */

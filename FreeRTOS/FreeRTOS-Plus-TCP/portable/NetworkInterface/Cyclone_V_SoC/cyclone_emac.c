@@ -40,16 +40,7 @@ extern const uint8_t ucMACAddress[ 6 ];
 uint32_t ulEMACVersion;
 uint32_t ulUsePHYAddress;
 
-uint32_t dwmac1000_read_version( int iMacID )
-{
-uint8_t *ioaddr = ucFirstIOAddres( iMacID );
-uint32_t value;
-
-	value = readl(ioaddr + GMAC_VERSION);
-	return value;
-}
-
-void dwmac1000_core_init(int iMacID, EMACDeviceInfo_t *hw, int mtu)
+void dwmac1000_core_init(int iMacID, int iSpeed, int mtu)
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
@@ -64,17 +55,17 @@ uint32_t value;
 	if (mtu > 2000)
 		value |= GMAC_CONTROL_JE;
 
-	if (hw->ps) {
+	if (iSpeed) {
 		value |= GMAC_CONTROL_TE;
 
-		if (hw->ps == SPEED_1000) {
+		if (iSpeed == SPEED_1000) {
 			value &= ~GMAC_CONTROL_PS;
 			//value |= GMAC_CONTROL_FES;
 			value &= ~GMAC_CONTROL_FES;
 		} else {
 			value |= GMAC_CONTROL_PS;
 
-//			if (hw->ps == SPEED_10)
+//			if (iSpeed == SPEED_10)
 				value &= ~GMAC_CONTROL_FES;
 //			else
 //				value |= GMAC_CONTROL_FES;
@@ -349,11 +340,10 @@ uint32_t status;
 
 		pxStats->pcs_link = 1;
 
-		speed_value = ((status & GMAC_RGSMIIIS_SPEED) >>
-			       GMAC_RGSMIIIS_SPEED_SHIFT);
-		if (speed_value == GMAC_RGSMIIIS_SPEED_125)
+		speed_value = ( ( status & GMAC_RGSMIIIS_SPEED) >> GMAC_RGSMIIIS_SPEED_SHIFT );
+		if( speed_value == GMAC_RGSMIIIS_SPEED_125 )
 			pxStats->pcs_speed = SPEED_1000;
-		else if (speed_value == GMAC_RGSMIIIS_SPEED_25)
+		else if( speed_value == GMAC_RGSMIIIS_SPEED_25 )
 			pxStats->pcs_speed = SPEED_100;
 		else
 			pxStats->pcs_speed = SPEED_10;
@@ -527,7 +517,7 @@ uint32_t value = MII_BUSY;
 	return 0;
 }
 
-void gmac_set_emac_interrupt_enable( int iMacID, uint32_t ulMask )
+void gmac_set_emac_interrupt_disable( int iMacID, uint32_t ulMask )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 
@@ -555,7 +545,6 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 }
 
 volatile uint32_t phyIDs[ 8 ];
-volatile uint32_t *IOaddr;
 volatile uint16_t ulLowerID, ulUpperID;
 
 #include "socal/alt_sysmgr.h"
@@ -565,8 +554,8 @@ ALT_SYSMGR_t *systemManager = ( ALT_SYSMGR_t * )ALT_SYSMGR_OFST;
 
 void dwmac1000_sys_init( int iMacID )
 {
+uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 EMACStats_t xStats;
-EMACDeviceInfo_t hw;
 int phyaddr, iIndex;
 
 //	ulVersion = systemManager->pinmuxgrp.EMACIO0.sel;               /* ALT_SYSMGR_PINMUX_EMACIO0 */
@@ -589,9 +578,6 @@ int phyaddr, iIndex;
 //	ulVersion = systemManager->pinmuxgrp.EMACIO17.sel;              /* ALT_SYSMGR_PINMUX_EMACIO17 */
 //	ulVersion = systemManager->pinmuxgrp.EMACIO18.sel;              /* ALT_SYSMGR_PINMUX_EMACIO18 */
 //	ulVersion = systemManager->pinmuxgrp.EMACIO19.sel;              /* ALT_SYSMGR_PINMUX_EMACIO19 */
-
-	IOaddr = ( volatile uint32_t * )ucFirstIOAddres( iMacID );
-	memset( &hw, '\0', sizeof hw );
 
 //	We are using EMAC-1 which is in a running state already.
 
@@ -672,6 +658,23 @@ int phyaddr, iIndex;
 		dwmac1000_dma_init( iMacID, &dma_cfg );
 		dwmac1000_dma_operation_mode( iMacID, SF_DMA_MODE, SF_DMA_MODE );
 	}
+
+	ulEMACVersion = readl(ioaddr + GMAC_VERSION);
+
+#define GMAC_EXPECTED_VERSION	0x1037ul
+	if( ulEMACVersion != GMAC_EXPECTED_VERSION )
+	{
+		lUDPLoggingPrintf( "Wrong version : %04lX ( expected %04lX )\n", ulEMACVersion, GMAC_EXPECTED_VERSION );
+		return;
+	}
+
+#define USE_NEW_PHY_HANDLING		1
+
+#if( USE_NEW_PHY_HANDLING != 0 )
+	cyclone_phy_init( iMacID, -1 );
+	/* Write the main MAC address at position 0 */
+	dwmac1000_set_umac_addr( iMacID, ucMACAddress, 0 );
+#else
 	ulUsePHYAddress = 0;
 	for( phyaddr = 0; phyaddr < ARRAY_SIZE( phyIDs ); phyaddr++ )
 	{
@@ -685,20 +688,10 @@ int phyaddr, iIndex;
 		}
 	}
 
-	ulEMACVersion = dwmac1000_read_version( iMacID );
-
-#define GMAC_EXPECTED_VERSION	0x1037ul
-	if( ulEMACVersion != GMAC_EXPECTED_VERSION )
-	{
-		lUDPLoggingPrintf( "Wrong version : %04lX ( expected %04lX )\n", ulEMACVersion, GMAC_EXPECTED_VERSION );
-		return;
-	}
-
 	/* Using the RGMII interface. */
 	dwmac1000_rgsmii( iMacID, &xStats );
 
-	hw.ps = SPEED_1000;
-	dwmac1000_core_init( iMacID, &hw, 1500u );
+	dwmac1000_core_init( iMacID, SPEED_1000, 1500u );
 	gmac_enable_transmission( iMacID, pdFALSE );
 	dwmac1000_rx_ipc_enable( iMacID, pdTRUE );
 
@@ -731,6 +724,7 @@ int phyaddr, iIndex;
 	vTaskDelay( 3000 );
 
 	dwmac1000_rgsmii( iMacID, &xStats );
+#endif
 }
 
 uint32_t Phy_Setup( EMACInterface_t *pxEMACif )

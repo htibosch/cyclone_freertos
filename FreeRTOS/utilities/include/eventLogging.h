@@ -49,7 +49,7 @@ extern "C" {
 
 #if USE_LOG_EVENT
 int iEventLogInit( void );
-void vEventLogClear( void );
+int iEventLogClear( void );
 #ifdef WIN32
 	void eventLogAdd (const char *apFmt, ...);
 #else
@@ -62,8 +62,9 @@ void eventFreeze(void);
 static __inline int iEventLogInit (void) {
 	return 1;
 }
-static __inline void eventLogClear (void)
+static __inline int iEventLogClear (void)
 {
+	return 0;
 }
 static __inline void eventLogAdd (const char *apFmt, ...) __attribute__ ((format (__printf__, 1, 2)));
 static __inline void eventLogAdd (const char *apFmt, ...)

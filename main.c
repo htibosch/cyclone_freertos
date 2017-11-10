@@ -452,6 +452,17 @@ extern BaseType_t xPlusTCPStarted;
 						}
 						lUDPLoggingPrintf( "LED toggle %lu\n", ledNr );
 					}
+					if( strncmp( cBuffer, "tcplen", 6 ) == 0 )
+					{
+					extern int tcp_min_rx_buflen;
+						int len = tcp_min_rx_buflen;
+						if( sscanf( cBuffer + 6, "%d", &len ) > 0 )
+						{
+							tcp_min_rx_buflen = len;
+						}
+						lUDPLoggingPrintf( "tcp_min_rx_buflen %d\n", tcp_min_rx_buflen );
+					}
+
 					if( strncmp( cBuffer, "freq", 4 ) == 0 )
 					{
 					alt_freq_t ulCurFreq;
@@ -512,9 +523,17 @@ extern BaseType_t xPlusTCPStarted;
 					}
 					#if( USE_LOG_EVENT != 0 )
 					{
-						if( strncmp( cBuffer, "event", 4 ) == 0 )
+						if( strncmp( cBuffer, "event", 5 ) == 0 )
 						{
-							eventLogDump();
+							if( cBuffer[ 5 ] == 'c' )
+							{
+								int rc = iEventLogClear();
+								lUDPLoggingPrintf( "cleared %d events\n", rc );
+							}
+							else
+							{
+								eventLogDump();
+							}
 						}
 					}
 					#endif /* USE_LOG_EVENT */
@@ -1277,7 +1296,7 @@ char *getTaskName()
 	return pcTaskGetName( ( TaskHandle_t ) NULL );
 }
 
-#define MEMCPY_BLOCK_SIZE		0x10000
+#define MEMCPY_BLOCK_SIZE		2048
 #define MEMCPY_EXTA_SIZE		128
 
 struct SMEmcpyData {
@@ -1301,7 +1320,10 @@ void *x_memset(void *pvDest, int iValue, size_t ulBytes)
 {
 }
 
+
 #define 	LOOP_COUNT		100
+
+static uint8_t __attribute__ ( ( aligned( 32 ) ) ) __attribute__ ((section (".oc_ram"))) oc_memory[ MEMCPY_BLOCK_SIZE + 16 ] ;
 
 void memcpy_test()
 {
@@ -1314,6 +1336,7 @@ char *source;
 uint64_t ullStartTime;
 uint32_t ulDelta;
 uint32_t ulTimes[ 2 ][ 4 ][ 4 ];
+uint32_t ulOcTimes[ 2 ][ 4 ][ 4 ];
 uint32_t ulSetTimes[ 2 ][ 4 ];
 int time_index = 0;
 int index;
@@ -1342,6 +1365,27 @@ uint64_t copy_size = LOOP_COUNT * MEMCPY_BLOCK_SIZE;
 				}
 				ulDelta = ( uint32_t ) ( ullGetHighResolutionTime() - ullStartTime );
 				ulTimes[ algorithm ][ target_offset ][ source_offset ] = ulDelta;
+			}
+		}
+	}
+	for( algorithm = 0; algorithm < 2; algorithm++ )
+	{
+		memcpy_func = memcpy;
+		for( target_offset = 0; target_offset < 4; target_offset++ ) {
+			for( source_offset = 0; source_offset < 4; source_offset++ ) {
+				if (algorithm == 0) {
+					target = pxBlock->target_data + target_offset;
+				} else {
+					target = oc_memory + target_offset;
+				}
+				source = pxBlock->source_data + source_offset;
+				ullStartTime = ullGetHighResolutionTime();
+				for( index = 0; index < LOOP_COUNT; index++ )
+				{
+					memcpy_func( target, source, MEMCPY_BLOCK_SIZE );
+				}
+				ulDelta = ( uint32_t ) ( ullGetHighResolutionTime() - ullStartTime );
+				ulOcTimes[ algorithm ][ target_offset ][ source_offset ] = ulDelta;
 			}
 		}
 	}
@@ -1376,6 +1420,28 @@ uint64_t copy_size = LOOP_COUNT * MEMCPY_BLOCK_SIZE;
 			uint32_t mb2 = ( uint32_t ) ( ( avg2 + 500000ull ) / 1000000ull );
 
 			logPrintf( "Offset[%d,%d] = memcpy %3lu.%03lu ms (%5lu MB/s) x_memcpy %3lu.%03lu ms  (%5lu MB/s)\n",
+				target_offset,
+				source_offset,
+				ulTime1 / 1000ul, ulTime1 % 1000ul,
+				mb1,
+				ulTime2 / 1000ul, ulTime2 % 1000ul,
+				mb2);
+		}
+	}
+	for( target_offset = 0; target_offset < 4; target_offset++ )
+	{
+		for( source_offset = 0; source_offset < 4; source_offset++ )
+		{
+			uint32_t ulTime1 = ulOcTimes[ 0 ][ target_offset ][ source_offset ];
+			uint32_t ulTime2 = ulOcTimes[ 1 ][ target_offset ][ source_offset ];
+
+			uint64_t avg1 = ( copy_size * 1000000ull ) / ulTime1;
+			uint64_t avg2 = ( copy_size * 1000000ull ) / ulTime2;
+
+			uint32_t mb1 = ( uint32_t ) ( ( avg1 + 500000ull ) / 1000000ull );
+			uint32_t mb2 = ( uint32_t ) ( ( avg2 + 500000ull ) / 1000000ull );
+
+			logPrintf( "Offset[%d,%d] = SDRAM  %3lu.%03lu ms (%5lu MB/s) OC mem   %3lu.%03lu ms  (%5lu MB/s)\n",
 				target_offset,
 				source_offset,
 				ulTime1 / 1000ul, ulTime1 % 1000ul,

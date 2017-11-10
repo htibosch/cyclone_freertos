@@ -142,6 +142,7 @@ C_SRCS += \
 	$(PLUS_TCP_PATH)/portable/NetworkInterface/Cyclone_V_SoC/NetworkInterface.c \
 	$(PLUS_TCP_PATH)/portable/NetworkInterface/Cyclone_V_SoC/cyclone_dma.c \
 	$(PLUS_TCP_PATH)/portable/NetworkInterface/Cyclone_V_SoC/cyclone_emac.c \
+	$(PLUS_TCP_PATH)/portable/NetworkInterface/Cyclone_V_SoC/cyclone_phy.c \
 	$(PLUS_TCP_PATH)/portable/NetworkInterface/Cyclone_V_SoC/uncached_memory.c \
 	$(PLUS_TCP_PATH)/portable/BufferManagement/BufferAllocation_1.c
 
@@ -151,10 +152,10 @@ ifeq ($(USE_USART),true)
 		$(CUR_PATH)/serial.c
 endif
 
-DEFS += -D SIMPLE_MEMCPY=0
-DEFS += -D SIMPLE_MEMSET=0
-C_SRCS += \
- 	$(COMMON_UTILS_PATH)/memcpy.c
+#    DEFS += -D SIMPLE_MEMCPY=0
+#    DEFS += -D SIMPLE_MEMSET=0
+#    C_SRCS += \
+#     	$(COMMON_UTILS_PATH)/memcpy.c
 
 #C_SRCS += \
 #	$(COMMON_UTILS_PATH)/memcpy_simple.c
@@ -176,7 +177,7 @@ C_SRCS += \
 ifeq ($(USE_LOG_EVENT),true)
 	DEFS += -D USE_LOG_EVENT=1
 	DEFS += -D LOG_EVENT_NAME_LEN=32
-	DEFS += -D LOG_EVENT_COUNT=256
+	DEFS += -D LOG_EVENT_COUNT=512
 	C_SRCS += \
 		$(UTILITIES_PATH)/eventLogging.c
 else
@@ -228,7 +229,7 @@ LINKER_SCRIPT=$(CUR_PATH)/cycloneV-dk-ram.ld
 TARGET = RTOSDemo.elf
 
 # Later, use -Os
-OPTIMIZATION = -O0
+OPTIMIZATION = -Os
 # OPTIMIZATION = -O0
 
 #HT Do not use it for now
@@ -245,9 +246,8 @@ C_EXTRA_FLAGS= \
 	-fno-builtin-memcpy \
 	-fno-builtin-memset \
 	-fdata-sections \
-	-ffunction-sections
-
-#	-mfpu=neon
+	-ffunction-sections \
+	-mfpu=neon
 
 #	-fno-strict-aliasing
 

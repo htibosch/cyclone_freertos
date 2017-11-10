@@ -38,8 +38,10 @@
 #define GMAC_FLOW_CTRL		0x00000018	/* Flow Control */
 #define GMAC_VLAN_TAG		0x0000001c	/* VLAN Tag */
 #define GMAC_VERSION		0x00000020	/* GMAC CORE Version */
-#define GMAC_DEBUG		0x00000024	/* GMAC debug register */
+#define GMAC_DEBUG			0x00000024	/* GMAC debug register */
 #define GMAC_WAKEUP_FILTER	0x00000028	/* Wake-up Frame Filter */
+#define GMAC_PCS_BASE		0x000000c0	/* PCS register base */
+#define GMAC_RGSMIIIS		0x000000d8	/* RGMII/SMII status */
 
 #define GMAC_INT_STATUS		0x00000038	/* interrupt status register */
 #define GMAC_INT_STATUS_PMT	BIT(3)
@@ -53,8 +55,6 @@
 #define GMAC_CORE_INIT (GMAC_CONTROL_JD | GMAC_CONTROL_PS | GMAC_CONTROL_ACS | \
 			GMAC_CONTROL_BE | GMAC_CONTROL_DCRS)
 
-#define GMAC_PCS_BASE		0x000000c0	/* PCS register base */
-#define GMAC_RGSMIIIS		0x000000d8	/* RGMII/SMII status */
 
 /* SGMII/RGMII status register */
 #define GMAC_RGSMIIIS_LNKMODE		BIT(0)
@@ -208,15 +208,6 @@ struct xEMACStats
 
 typedef struct xEMACStats EMACStats_t;
 
-struct xEMACDeviceInfo
-{
-	uint32_t ps;
-//	uint32_t pmt;
-//	uint32_t pcs;
-};
-
-typedef struct xEMACDeviceInfo EMACDeviceInfo_t;
-
 struct xEMAC_config {
 	unsigned
 		prelen          : 2,			/*  0  prelen */
@@ -286,12 +277,12 @@ typedef struct xSYSMGR_EMACGRP SYSMGR_EMACGRP_t;
 
 void dwmac1000_sys_init( int iMacID );
 void dwmac1000_rgsmii(int iMacID, EMACStats_t *pxStats);
-void dwmac1000_core_init(int iMacID, EMACDeviceInfo_t *hw, int mtu);
+void dwmac1000_core_init(int iMacID, int iSpeed, int mtu);
 
 /* Enable disable MAC RX/TX */
 void gmac_enable_transmission(int iMacID, bool enable);
 
-void gmac_set_emac_interrupt_enable( int iMacID, uint32_t ulMask );
+void gmac_set_emac_interrupt_disable( int iMacID, uint32_t ulMask );
 void gmac_clear_emac_interrupt_status( int iMacID, uint32_t ulMask );
 uint32_t gmac_get_emac_interrupt_status( int iMacID, int iClear );
 
