@@ -529,7 +529,7 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 			return -1;
 		}
 
-		FreeRTOS_printf( ( "PHY : Link Partner Capabilities :" ) );
+		FreeRTOS_printf( ( "PHY : Link Partner Capabilities :\n" ) );
 		RegVal = gmac_mdio_read( iMacID, iPHYAddress, PHY_1GSTS_REG);
 		FreeRTOS_printf( ( "PHY :       1000 Mbps Full Duplex (%s)\n", (RegVal & _1GSTS_PARTN_FULL_1000M) ? "YES" : "NO" ) );
 		FreeRTOS_printf( ( "PHY :       1000 Mbps Half Duplex (%s)\n", (RegVal & _1GSTS_PARTN_HALF_1000M) ? "YES" : "NO" ) );
