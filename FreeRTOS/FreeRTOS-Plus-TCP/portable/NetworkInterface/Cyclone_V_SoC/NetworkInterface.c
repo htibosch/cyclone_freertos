@@ -190,6 +190,8 @@ a maximum count of GMAC_TX_BUFFERS, which is the number of
 DMA TX descriptors. */
 static SemaphoreHandle_t xTXDescriptorSemaphore = NULL;
 
+extern int tcp_min_rx_buflen;
+
 /*
  * Check if a given packet should be accepted.
  */
@@ -332,6 +334,15 @@ alt_cache_l2_sync();
 		//#define DMA_INTR_NORMAL	( DMA_INTR_ENA_NIE | DMA_INTR_ENA_RIE | DMA_INTR_ENA_TIE )
 		gmac_set_dma_interrupt_enable( iMacID, DMA_INTR_NORMAL );
 
+
+//		{
+//			/* HT: I don't think this really helps against getting
+//			DMA_STATUS_GMI interrupts. */
+//			uint8_t *ioaddr = ucFirstIOAddres( iMacID );
+//			writel( ( uint32_t ) ~0ul, ioaddr + GMAC_MMC_RX_INTR_MASK );
+//			writel( ( uint32_t ) ~0ul, ioaddr + GMAC_MMC_TX_INTR_MASK );
+//		}
+
 		gmac_dma_transmit_poll( iMacID );
 		#if( NETWORK_BUFFERS_CACHED != 0 )
 		{
@@ -342,6 +353,7 @@ alt_cache_l2_sync();
 			alt_cache_system_purge( ucNetworkPackets, sizeof( ucNetworkPackets ) );
 		}
 		#endif
+		tcp_min_rx_buflen = 5;
 
 		/* The deferred interrupt handler task is created at the highest
 		possible priority to ensure the interrupt handler can return directly
@@ -363,21 +375,32 @@ alt_cache_l2_sync();
 }
 /*-----------------------------------------------------------*/
 
-volatile uint32_t ulCheckStatus;
+static volatile uint32_t ulLastDMAStatus, ulLastEMACStatus;
 /* Variable must be set by main.c as soon as +TCP is up. */
 BaseType_t xPlusTCPStarted;
 
 void vEMACInterrupthandler( uint32_t ulICCIAR, void * pvContext )
 {
-static uint32_t ulLastDMAStatus;
 uint32_t ulDMAStatus;
 DMA_STATUS_REG_t reg;
 BaseType_t xHigherPriorityTaskWoken = 0ul;
-//uint32_t ulEMACStatus;
+uint32_t ulEMACStatus;
+int iInterruptMacID = 0;
+uint8_t *ioaddr;
+
+	switch( ulICCIAR & 0x3FFUL )
+	{
+	case ALT_INT_INTERRUPT_EMAC0_IRQ: iInterruptMacID = 0; break;
+	case ALT_INT_INTERRUPT_EMAC1_IRQ: iInterruptMacID = 1; break;
+	return;
+	}
+	ioaddr = ucFirstIOAddres( iInterruptMacID );
 
 	/* Get DMA interrupt status and clear all bits. */
-//	ulEMACStatus = gmac_get_emac_interrupt_status( iMacID, pdTRUE );
-	ulDMAStatus  = gmac_get_dma_interrupt_status( iMacID, pdFALSE );
+	ulEMACStatus = gmac_get_emac_interrupt_status( iInterruptMacID, pdFALSE );
+	ulDMAStatus  = gmac_get_dma_interrupt_status( iInterruptMacID, pdFALSE );
+ulLastEMACStatus = ulEMACStatus;
+ulLastDMAStatus = ulDMAStatus;
 /*
 #define DMA_STATUS_GLPII        0x40000000	// GMAC LPI interrupt
 #define DMA_STATUS_GPI          0x10000000	// PMT interrupt
@@ -402,6 +425,7 @@ BaseType_t xHigherPriorityTaskWoken = 0ul;
 #define DMA_CONTROL_FTF         0x00100000	// Flush transmit FIFO
 
                                 0x08000084
+								0x08680084
 										 Transmit Buffer Unavailable ( DMA_STATUS_TU )
                                         Receive Buffer Unavailable ( DMA_STATUS_RU )
 								   MMC interrupt ( DMA_STATUS_GMI )
@@ -411,6 +435,25 @@ BaseType_t xHigherPriorityTaskWoken = 0ul;
 	reg.ulValue = ulDMAStatus;
 	ulDMAStatus &= ISR_MASK;
 
+	if( ( ulDMAStatus & DMA_STATUS_GMI ) != 0 )
+	{
+	uint32_t offset;
+		if (readl(ioaddr + GMAC_MMC_RX_INTR)) {}
+		if (readl(ioaddr + GMAC_MMC_TX_INTR)) {}
+		if (readl(ioaddr + GMAC_MMC_RX_CSUM_OFFLOAD)) {}
+		/* Read all counters to clear interrupt bits. */
+		for (offset = 0x114; offset <= 0x1E4; ) {
+			if (readl(ioaddr + offset)) {}
+			offset += 4;
+		}
+		for (offset = 0x210; offset <= 0x284; ) {
+			if (readl(ioaddr + offset)) {}
+			offset += 4;
+		}
+		if (readl(ioaddr + 0x250)) {}
+		gmac_clear_dma_interrupt_status( iInterruptMacID, DMA_STATUS_GMI );
+		gmac_clear_emac_interrupt_status( iInterruptMacID, 0x000000F0 );
+	}
 //	if( ( ( ulDMAStatus & RX_MASK ) == 0 ) && ( pxNextRxDesc != NULL ) && ( pxNextRxDesc->own == 0 ) )
 //	{
 //		eventLogAdd("RX_EVENT own=0" );
@@ -448,13 +491,13 @@ BaseType_t xHigherPriorityTaskWoken = 0ul;
 	if( ulDMAStatus & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) )
 	{
 	uint32_t ulmask;
-		ulmask = gmac_clear_dma_interrupt_status( iMacID, ulDMAStatus & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) ) & ( TX_MASK | RX_MASK | DMA_STATUS_NIS );
+		ulmask = gmac_clear_dma_interrupt_status( iInterruptMacID, ulDMAStatus & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) ) & ( TX_MASK | RX_MASK | DMA_STATUS_NIS );
 		if( ulmask != 0ul)
 		{
-			ulmask = gmac_clear_dma_interrupt_status( iMacID, ulmask & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) ) & ( TX_MASK | RX_MASK | DMA_STATUS_NIS );
+			ulmask = gmac_clear_dma_interrupt_status( iInterruptMacID, ulmask & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) ) & ( TX_MASK | RX_MASK | DMA_STATUS_NIS );
 			if( ulmask != 0ul)
 			{
-				ulmask = gmac_clear_dma_interrupt_status( iMacID, ulmask & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) ) & ( TX_MASK | RX_MASK | DMA_STATUS_NIS );
+				ulmask = gmac_clear_dma_interrupt_status( iInterruptMacID, ulmask & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) ) & ( TX_MASK | RX_MASK | DMA_STATUS_NIS );
 			}
 		}
 	}
@@ -462,10 +505,10 @@ BaseType_t xHigherPriorityTaskWoken = 0ul;
 //	{
 //	uint32_t ulStatus;
 //
-//		ulStatus = gmac_clear_dma_interrupt_status( iMacID, ulDMAStatus & ( TX_MASK | RX_MASK ) ) & ISR_MASK;
+//		ulStatus = gmac_clear_dma_interrupt_status( iInterruptMacID, ulDMAStatus & ( TX_MASK | RX_MASK ) ) & ISR_MASK;
 //		if( ( ulStatus & DMA_STATUS_NIS ) != 0ul )
 //		{
-//			ulCheckStatus = gmac_clear_dma_interrupt_status( iMacID, DMA_STATUS_NIS ) & ISR_MASK;
+//			ulCheckStatus = gmac_clear_dma_interrupt_status( iInterruptMacID, DMA_STATUS_NIS ) & ISR_MASK;
 //			eventLogAdd( "NIE: %04lX -> %04lX", ulStatus, ulCheckStatus );
 //		}
 //	}

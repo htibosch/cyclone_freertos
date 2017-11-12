@@ -110,10 +110,6 @@ expansion. */
 	#define	EMAC_MAX_BLOCK_TIME_MS	100ul
 #endif
 
-#if !defined( GMAC_USES_TX_CALLBACK ) || ( GMAC_USES_TX_CALLBACK != 1 )
-	#error Please define GMAC_USES_TX_CALLBACK as 1
-#endif
-
 #if( ipconfigZERO_COPY_RX_DRIVER != 0 )
 	#warning The EMAC of SAM4E has fixed-size RX buffers so ZERO_COPY_RX is not possible
 #endif
@@ -231,9 +227,9 @@ static void prvTxCallback( uint32_t ulStatus, uint8_t *puc_buffer )
 {
 	if( ( xTxBufferQueue != NULL ) && ( xEMACTaskHandle != NULL ) )
 	{
-		/* let the prvEMACHandlerTask know that there was an RX event. */
+		/* let the prvEMACHandlerTask know that there was an TX event. */
 		ulISREvents |= EMAC_IF_TX_EVENT;
-
+		/* Wakeup prvEMACHandlerTask. */
 		vTaskNotifyGiveFromISR( xEMACTaskHandle, ( BaseType_t * ) &xGMACSwitchRequired );
 		xQueueSendFromISR( xTxBufferQueue, &puc_buffer, ( BaseType_t * ) &xGMACSwitchRequired );
 		tx_release_count[ 2 ]++;
@@ -566,6 +562,7 @@ static UBaseType_t uxCurrentCount;
 	}
 
 }
+/*-----------------------------------------------------------*/
 
 static void prvEMACHandlerTask( void *pvParameters )
 {

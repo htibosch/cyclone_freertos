@@ -27,7 +27,7 @@ USE_FREERTOS_FAT=false
 USE_USB_CDC=true
 USE_TELNET=true
 USE_USART=true
-USE_LOG_EVENT=true
+USE_LOG_EVENT=false
 
 # Base paths
 # PRJ_PATH points to e:\home

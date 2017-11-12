@@ -327,11 +327,14 @@ BaseType_t xReturn;
 
 static void prvEMACHandlerTask( void *pvParameters )
 {
+TimeOut_t xPhyTime;
+TickType_t xPhyRemTime;
 UBaseType_t uxCurrentCount;
+BaseType_t xResult = 0;
+uint32_t xStatus;
 const TickType_t ulMaxBlockTime = pdMS_TO_TICKS( 100UL );
 UBaseType_t uxLastMinBufferCount = 0;
 UBaseType_t uxCurrentBufferCount = 0;
-uint32_t ulStatus;
 
 	/* Remove compiler warnings about unused parameters. */
 	( void ) pvParameters;
@@ -339,6 +342,9 @@ uint32_t ulStatus;
 	/* A possibility to set some additional task properties like calling
 	portTASK_USES_FLOATING_POINT() */
 	iptraceEMAC_TASK_STARTING();
+
+	vTaskSetTimeOutState( &xPhyTime );
+	xPhyRemTime = pdMS_TO_TICKS( PHY_LS_LOW_CHECK_TIME_MS );
 
 	for( ;; )
 	{
@@ -376,7 +382,7 @@ uint32_t ulStatus;
 		if( ( xEMACpsif.isr_events & EMAC_IF_RX_EVENT ) != 0 )
 		{
 			xEMACpsif.isr_events &= ~EMAC_IF_RX_EVENT;
-			emacps_check_rx( &xEMACpsif );
+			xResult = emacps_check_rx( &xEMACpsif );
 		}
 
 		if( ( xEMACpsif.isr_events & EMAC_IF_TX_EVENT ) != 0 )
@@ -390,34 +396,32 @@ uint32_t ulStatus;
 			xEMACpsif.isr_events &= ~EMAC_IF_ERR_EVENT;
 			emacps_check_errors( &xEMACpsif );
 		}
-
-		ulStatus = ulReadMDIO( PHY_REG_01_BMSR );
-
-		if( ulPHYLinkStatus != ulStatus )
+		if( xResult > 0 )
 		{
-		volatile BaseType_t xStartNego = 0;
+			/* A packet was received. No need to check for the PHY status now,
+			but set a timer to check it later on. */
+			vTaskSetTimeOutState( &xPhyTime );
+			xPhyRemTime = pdMS_TO_TICKS( PHY_LS_HIGH_CHECK_TIME_MS );
+			xResult = 0;
+		}
+		else if( xTaskCheckForTimeOut( &xPhyTime, &xPhyRemTime ) != pdFALSE )
+		{
+			xStatus = ulReadMDIO( PHY_REG_01_BMSR );
 
-			/* Test if the Link Status has become high. */
-			if( ( ( ulPHYLinkStatus ^ ulStatus ) & niBMSR_LINK_STATUS ) && ( ( ulStatus & niBMSR_LINK_STATUS ) != 0 ) )
+			if( ( ulPHYLinkStatus & niBMSR_LINK_STATUS ) != ( xStatus & niBMSR_LINK_STATUS ) )
 			{
-				xStartNego = pdTRUE;
+				ulPHYLinkStatus = xStatus;
+				FreeRTOS_printf( ( "prvEMACHandlerTask: PHY LS now %d\n", ( ulPHYLinkStatus & niBMSR_LINK_STATUS ) != 0 ) );
 			}
 
-			if( ulPHYLinkStatus != ulStatus )
+			vTaskSetTimeOutState( &xPhyTime );
+			if( ( ulPHYLinkStatus & niBMSR_LINK_STATUS ) != 0 )
 			{
-				ulPHYLinkStatus = ulStatus;
-				FreeRTOS_printf( ( "prvEMACHandlerTask: PHY LS now %d Start nego %d\n", ( ulPHYLinkStatus & niBMSR_LINK_STATUS ) != 0, xStartNego ) );
-				if( xStartNego )
-				{
-				uint32_t ulLinkSpeed;
-				XEmacPs *pxEMAC_PS = &( xEMACpsif.emacps );
-
-					ulLinkSpeed = Phy_Setup( pxEMAC_PS );
-					XEmacPs_SetOperatingSpeed( pxEMAC_PS, ulLinkSpeed);
-
-					/* Setting the operating speed of the MAC needs a delay. */
-					vTaskDelay( pdMS_TO_TICKS( 25UL ) );
-				}
+				xPhyRemTime = pdMS_TO_TICKS( PHY_LS_HIGH_CHECK_TIME_MS );
+			}
+			else
+			{
+				xPhyRemTime = pdMS_TO_TICKS( PHY_LS_LOW_CHECK_TIME_MS );
 			}
 		}
 	}

@@ -87,7 +87,6 @@
 #include "FreeRTOS_ARP.h"
 #include "FreeRTOS_TCP_WIN.h"
 
-#include "eventLogging.h"
 
 /* Just make sure the contents doesn't get compiled if TCP is not enabled. */
 #if ipconfigUSE_TCP == 1
@@ -2356,7 +2355,13 @@ BaseType_t xSendLength = 0;
 			pxSocket->u.xTCP.ucTCPState == eSYN_RECEIVED ? "eSYN_RECEIVED" : "eCONNECT_SYN",
 			usExpect, ucTCPFlags ) );
 		vTCPStateChange( pxSocket, eCLOSE_WAIT );
-		pxTCPHeader->ucTCPFlags |= ipTCP_FLAG_RST;
+
+		/* Send RST with the expected sequence and ACK numbers,
+		otherwise the packet will be ignored. */
+		pxTCPWindow->ulOurSequenceNumber = FreeRTOS_htonl( pxTCPHeader->ulAckNr );
+		pxTCPWindow->rx.ulCurrentSequenceNumber = ulSequenceNumber;
+
+		pxTCPHeader->ucTCPFlags = ipTCP_FLAG_RST;
 		xSendLength = ( BaseType_t ) ( ipSIZE_OF_IPv4_HEADER + ipSIZE_OF_TCP_HEADER + uxOptionsLength );
 		pxTCPHeader->ucTCPOffset = ( uint8_t )( ( ipSIZE_OF_TCP_HEADER + uxOptionsLength ) << 2 );
 	}
@@ -2684,22 +2689,17 @@ int32_t lRxSpace;
 
 			*ppxNetworkBuffer = NULL;
 			xSendLength = 0;
-//eventLogAdd("TX del ACK %u", pxSocket->u.xTCP.usTimeout);
 		}
-		else 
+		else if( pxSocket->u.xTCP.pxAckMessage != NULL )
 		{
-			//eventLogAdd("TX imm ACK %s", pxSocket->u.xTCP.pxAckMessage != NULL ? "rep" : "new");
-			if( pxSocket->u.xTCP.pxAckMessage != NULL )
+			/* As an ACK is not being delayed, remove any earlier delayed ACK
+			message. */
+			if( pxSocket->u.xTCP.pxAckMessage != *ppxNetworkBuffer )
 			{
-				/* As an ACK is not being delayed, remove any earlier delayed ACK
-				message. */
-				if( pxSocket->u.xTCP.pxAckMessage != *ppxNetworkBuffer )
-				{
-					vReleaseNetworkBufferAndDescriptor( pxSocket->u.xTCP.pxAckMessage );
-				}
-
-				pxSocket->u.xTCP.pxAckMessage = NULL;
+				vReleaseNetworkBufferAndDescriptor( pxSocket->u.xTCP.pxAckMessage );
 			}
+
+			pxSocket->u.xTCP.pxAckMessage = NULL;
 		}
 	}
 	#else

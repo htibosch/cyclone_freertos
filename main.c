@@ -73,6 +73,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <strings.h>
+#include <ctype.h>
 
 /* Scheduler include files. */
 #include "FreeRTOS.h"
@@ -220,6 +221,10 @@ static UBaseType_t ulNextRand;
 
 static SemaphoreHandle_t xServerSemaphore;
 
+/* Use the time it takes to configure EMAC and Ethernet PHY as a seed for
+the randomiser. */
+uint64_t ullStartConfigTime;
+
 int verboseLevel;
 
 /* Handle of the task that runs the FTP and HTTP servers. */
@@ -264,6 +269,8 @@ int main( void )
 	but a DHCP server cannot be	contacted. */
 
 //#warning Re-enable
+
+	ullStartConfigTime = ullGetHighResolutionTime();
 	FreeRTOS_IPInit( ucIPAddress, ucNetMask, ucGatewayAddress, ucDNSServerAddress, ucMACAddress );
 
 	xTaskCreate( prvCommandTask, "Command", mainCOMMAND_TASK_STACK_SIZE, NULL, mainCOMMAND_TASK_PRIORITY, &xCommandTaskHandle );
@@ -306,6 +313,12 @@ extern BaseType_t xPlusTCPStarted;
 		char cLastBuffer[ 16 ];
 		char cBuffer[ 128 ];
 		BaseType_t xLedValue = 0;
+		/* Echo function. */
+		Socket_t xClientSocket = NULL;
+		BaseType_t wasConnected = pdFALSE;
+		struct freertos_sockaddr xAddress;
+		struct freertos_sockaddr xLocalAddress;
+		struct freertos_sockaddr xEchoServerAddress;
 
 		xServerSemaphore = xSemaphoreCreateBinary();
 		configASSERT( xServerSemaphore != NULL );
@@ -336,6 +349,49 @@ extern BaseType_t xPlusTCPStarted;
 
 			xSemaphoreTake( xServerSemaphore, xReceiveTimeOut );
 
+			if( xClientSocket != NULL )
+			{
+			int rc;
+			uint8_t buffer[ 128 ];
+				rc = FreeRTOS_recv( xClientSocket, buffer, sizeof buffer, 0 );
+				if( rc != 0 )
+				{
+					FreeRTOS_printf( ( "FreeRTOS_recv: %d\n", rc ) );
+				}
+				if( !wasConnected && FreeRTOS_issocketconnected( xClientSocket ) )
+				{
+				const char hello[] = "Hello world\r\n";
+				const TickType_t xReceiveTimeOut = pdMS_TO_TICKS( 100 );
+				int count;
+					FreeRTOS_printf( ( "Socket now connected\n" ) );
+					wasConnected = pdTRUE;
+					rc = FreeRTOS_send( xClientSocket, hello, sizeof hello - 1, 0 );
+
+					/* Finished using the connected socket, initiate a graceful close:
+					FIN, FIN+ACK, ACK. */
+					FreeRTOS_shutdown( xClientSocket, FREERTOS_SHUT_RDWR );
+
+					FreeRTOS_setsockopt( xClientSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof( xReceiveTimeOut ) );
+
+					/* Expect FreeRTOS_recv() to return an error once the shutdown is
+					complete. */
+					for( count = 0; count < 10; count++ )
+					{
+					int rc;
+						rc = FreeRTOS_recv( xClientSocket, buffer, sizeof buffer, 0 );
+						if( ( rc < 0 ) && ( rc != -pdFREERTOS_ERRNO_EWOULDBLOCK ) )
+						{
+							break;
+						}
+
+					}
+				}
+				if( ( rc < 0 ) && ( rc != -pdFREERTOS_ERRNO_EWOULDBLOCK ) )
+				{
+					FreeRTOS_closesocket( xClientSocket );
+					xClientSocket = NULL;
+				}
+			}
 			vSetLED( xLedValue < 3 );
 			if( ++xLedValue >= 6 )
 			{
@@ -463,6 +519,80 @@ extern BaseType_t xPlusTCPStarted;
 						lUDPLoggingPrintf( "tcp_min_rx_buflen %d\n", tcp_min_rx_buflen );
 					}
 
+					if( strncmp( cBuffer, "echo", 4 ) == 0 )
+					{
+						char *ptr = cBuffer + 4;
+						while( isspace( *ptr ) ) ptr++;
+						unsigned u[ 4 ];
+						unsigned portNr;
+						char ch[ 4 ];
+						int rc;
+						if( sscanf( ptr, "%u%c%u%c%u%c%u%c%u",
+							u + 0, ch + 0,
+							u + 1, ch + 1,
+							u + 2, ch + 2,
+							u + 3, ch + 3,
+							&portNr) >= 9 )
+						{
+							const TickType_t xReceiveTimeOut = pdMS_TO_TICKS( 0 );
+							const TickType_t xSendTimeOut = pdMS_TO_TICKS( 0 );
+							uint32_t ipAddress =
+								( u[ 0 ] << 24 ) |
+								( u[ 1 ] << 16 ) |
+								( u[ 2 ] <<  8 ) |
+								( u[ 3 ] <<  0 );
+							lUDPLoggingPrintf( "Connect to %lxip port %u\n",
+								ipAddress, portNr);
+
+							/* Create a TCP socket. */
+							xClientSocket = FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_STREAM, FREERTOS_IPPROTO_TCP );
+							configASSERT( xClientSocket != FREERTOS_INVALID_SOCKET );
+							wasConnected = pdFALSE;
+
+							memset( &xAddress, '\0', sizeof xAddress );
+							memset( &xEchoServerAddress, '\0', sizeof xEchoServerAddress );
+
+							xEchoServerAddress.sin_addr = FreeRTOS_htonl( ipAddress );
+							xEchoServerAddress.sin_port = FreeRTOS_htons( portNr );
+
+							FreeRTOS_bind( xClientSocket, &xAddress, sizeof xAddress );
+
+							/* Set a time out so a missing reply does not cause the task to block
+							indefinitely. */
+							FreeRTOS_setsockopt( xClientSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof( xReceiveTimeOut ) );
+							FreeRTOS_setsockopt( xClientSocket, 0, FREERTOS_SO_SNDTIMEO, &xSendTimeOut, sizeof( xSendTimeOut ) );
+							FreeRTOS_setsockopt( xClientSocket, 0, FREERTOS_SO_SET_SEMAPHORE, ( void * ) &xServerSemaphore, sizeof( xServerSemaphore ) );
+
+							#if( ipconfigUSE_TCP_WIN == 1 )
+							{
+							WinProperties_t xWinProps;
+
+								/* Fill in the buffer and window sizes that will be used by the socket. */
+								xWinProps.lTxBufSize = 4 * ipconfigTCP_MSS;
+								xWinProps.lTxWinSize = 2;
+								xWinProps.lRxBufSize = 4 * ipconfigTCP_MSS;
+								xWinProps.lRxWinSize = 2;
+								/* Set the window and buffer sizes. */
+								FreeRTOS_setsockopt( xClientSocket, 0, FREERTOS_SO_WIN_PROPERTIES, ( void * ) &xWinProps,	sizeof( xWinProps ) );
+							}
+							#endif /* ipconfigUSE_TCP_WIN */
+
+							FreeRTOS_GetLocalAddress( xClientSocket, &xLocalAddress );
+							/* Connect to the echo server. */
+							rc = FreeRTOS_connect( xClientSocket, &xEchoServerAddress, sizeof( xEchoServerAddress ) );
+
+							FreeRTOS_printf( ( "FreeRTOS_connect to %lxip:%u to %lxip:%u: rc %d\n",
+								FreeRTOS_ntohl( xLocalAddress.sin_addr ),
+								FreeRTOS_ntohs( xLocalAddress.sin_port ),
+								FreeRTOS_ntohl( xEchoServerAddress.sin_addr ),
+								FreeRTOS_ntohs( xEchoServerAddress.sin_port ),
+								rc ) );
+						}
+						else
+						{
+							lUDPLoggingPrintf( "Usage: echo <ip-address> <port nr>\n" );
+						}
+					}
 					if( strncmp( cBuffer, "freq", 4 ) == 0 )
 					{
 					alt_freq_t ulCurFreq;
@@ -675,12 +805,21 @@ events are only received if implemented in the MAC driver. */
 
 /* Called by FreeRTOS+TCP when the network connects or disconnects.  Disconnect
 events are only received if implemented in the MAC driver. */
+extern void vNetworkSocketsInit( void );
 void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
 {
 
 	/* If the network has just come up...*/
 	if( eNetworkEvent == eNetworkUp )
 	{
+		{
+		uint64_t ullDiff = ullGetHighResolutionTime() - ullStartConfigTime;
+		uint32_t ulRandomNumber = ( uint32_t ) ( ( ullDiff ^ ( ullDiff << 8 ) ) & 0xffffffffull );
+			FreeRTOS_printf( ( "Network initialisation took %lu mS srand( 0x%08lX )\n",
+				( uint32_t )( ( ullDiff + 500ull ) / 1000ull ), ulRandomNumber ) );
+			vSRand( ulRandomNumber );
+			vNetworkSocketsInit();
+		}
 		/* Create the tasks that use the IP stack if they have not already been
 		created. */
 		if( xTasksAlreadyCreated == pdFALSE )
@@ -806,7 +945,7 @@ const uint32_t ulMultiplier = 0x015a4e35UL, ulIncrement = 1UL;
 }
 /*-----------------------------------------------------------*/
 
-static void prvSRand( UBaseType_t ulSeed )
+void vSRand( UBaseType_t ulSeed )
 {
 	/* Utility function to seed the pseudo random number generator. */
 	ulNextRand = ulSeed;
@@ -1314,16 +1453,18 @@ typedef void * ( * FMemset ) ( void *pvDest, int iChar, size_t ulBytes );
 
 void *x_memcpy( void *pvDest, const void *pvSource, size_t ulBytes )
 {
+	return pvDest;
 }
 
 void *x_memset(void *pvDest, int iValue, size_t ulBytes)
 {
+	return pvDest;
 }
 
 
 #define 	LOOP_COUNT		100
 
-static uint8_t __attribute__ ( ( aligned( 32 ) ) ) __attribute__ ((section (".oc_ram"))) oc_memory[ MEMCPY_BLOCK_SIZE + 16 ] ;
+static char __attribute__ ( ( aligned( 32 ) ) ) __attribute__ ((section (".oc_ram"))) oc_memory[ MEMCPY_BLOCK_SIZE + 16 ] ;
 
 void memcpy_test()
 {

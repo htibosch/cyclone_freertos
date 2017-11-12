@@ -8,11 +8,11 @@
 #define DMA_RCV_POLL_DEMAND	0x00001008	/* Received Poll Demand */
 #define DMA_RCV_BASE_ADDR	0x0000100c	/* Receive List Base */
 #define DMA_TX_BASE_ADDR	0x00001010	/* Transmit List Base */
-#define DMA_STATUS		0x00001014	/* Status Register */
-#define DMA_CONTROL		0x00001018	/* Ctrl (Operational Mode) */
+#define DMA_STATUS			0x00001014	/* Status Register */
+#define DMA_CONTROL			0x00001018	/* Ctrl (Operational Mode) */
 #define DMA_INTR_ENA		0x0000101c	/* Interrupt Enable */
 #define DMA_MISSED_FRAME_CTR	0x00001020	/* Missed Frame Counter */
-
+#define DMA_AXI_BUS_MODE	0x00001028
 
 /*--- DMA BLOCK defines ---*/
 /* DMA Bus Mode register defines */

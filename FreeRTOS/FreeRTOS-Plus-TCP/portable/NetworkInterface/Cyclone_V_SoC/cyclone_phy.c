@@ -34,7 +34,7 @@
 #define PHY_RESET_DELAY			 2000				/* Wait around  2 ms							*/
 #define PHY_CONFIG_DELAY		25000				/* Wait around 25 ms							*/
 
-/* ------------------------------------------------------------------------------------------------ */
+/*-----------------------------------------------------------*/
 
 #define PHY_READ_TO							(  100000)	/* Max wait time (us) when reading from PHY	*/
 #define PHY_WRITE_TO						(  100000)	/* Max wait time (us) when reading from PHY	*/
@@ -74,7 +74,7 @@
 #define PHY_EXTW_REG						12			/* PHY Extended Write Register				*/
 #define PHY_EXTR_REG						13			/* PHY Extended Read Register				*/
 
-													/* -------------------------------------------- */
+/*-----------------------------------------------------------*/
 #define PHY_ID_KSZ9021						(0x16100022)	/* ((PHY_ID2&0xFFF0) << 16) | PHY_ID1	*/
 #define PHY_SR_REG_KSZ9021					(31)			/* Vendor specific auto neg results		*/
 #define MII_KSZ9021_EXT_CTRL				0x0B
@@ -93,7 +93,8 @@
  #ifndef KSZ9021_TX_SKEW
   #define KSZ9021_TX_SKEW					0
  #endif
-													/* -------------------------------------------- */
+
+/*-----------------------------------------------------------*/
 #define PHY_ID_KSZ9031						(0x16200022)	/* ((PHY_ID2&0xFFF0) << 16) | PHY_ID1	*/
 #define PHY_SR_REG_KSZ9031					(31)			/* Vendor specific auto neg results		*/
 #define MII_KSZ9031_EXT_CTRL				0x0D
@@ -107,7 +108,8 @@
  #ifndef KSZ9031_CLOCK_SKEW
   #define KSZ9031_CLOCK_SKEW				0x3FF
  #endif
-													/* -------------------------------------------- */
+
+/*-----------------------------------------------------------*/
 #define PHY_ID_PEF7071						(0xA400D565)	/* ((PHY_ID2&0xFFF0) << 16) | PHY_ID1	*/
 #define PHY_MIICTRL_REG_PEF7071				(0x17)
  #define PHY_TX_SKEW_MASK_PEF7071			(0x0300)
@@ -123,7 +125,7 @@
 #define PHY_SR_REG_PEF7071					(0x18)			/* Vendor specific auto neg results		*/
 #define PHY_IMASK_REG_PEF7071				(0x19)
 
-													/* -------------------------------------------- */
+/*-----------------------------------------------------------*/
 #define PHY_ID_MARV88E1518					(0x0DD00141)	/* ((PHY_ID2&0xFFF0) << 16) | PHY_ID1	*/
 #define PHY_COPPER_REG1_88E1518				16
 #define PHY_SS_REG_88E1518					17
@@ -134,144 +136,7 @@
  #endif
 #define PHY_PAGE_ADDR_REG_88E1518			22
 
-													/* -------------------------------------------- */
-#define SYS_CTRL_ADDR						0xF8000000
-#define SYS_CTRL_LOCK_ADDR					(SYS_CTRL_ADDR + 0x4)
-#define SYS_CTRL_UNLOCK_ADDR				(SYS_CTRL_ADDR + 0x8)
- #define SYS_CTRL_LOCK_KEY_VALUE 			0x767B
- #define SYS_CTRL_UNLOCK_KEY_VALUE			0xDF0D
-#define GEM0_CLK_CTRL_ADDR					(SYS_CTRL_ADDR + 0x140)
-#define GEM1_CLK_CTRL_ADDR					(SYS_CTRL_ADDR + 0x144)
- #define GEM_CLK_CTRL_DIV_MASK				0xFC0FC0FF
- #define GEM_CLK_CTRL_1000MBPS_DIV0			8
- #define GEM_CLK_CTRL_1000MBPS_DIV1			1
- #define GEM_CLK_CTRL_100MBPS_DIV0			8
- #define GEM_CLK_CTRL_100MBPS_DIV1			5
- #define GEM_CLK_CTRL_10MBPS_DIV0			8
- #define GEM_CLK_CTRL_10MBPS_DIV1			50
-#define SYS_CTRL_GEM_RESET					(SYS_CTRL_ADDR + 0x214)
-
-/* ------------------------------------------------------------------------------------------------ */
-/* Base addresses of the HW EMAC modules															*/
-
-#if (((OS_PLATFORM) & 0x00FFFFFF) == 0xAAC5)		/* Arria V / Cyclone V							*/
-  volatile uint32_t * const G_EMACaddr[2] = { (volatile uint32_t *)0xFF700000,
-                                              (volatile uint32_t *)0xFF702000
-                                            };
-#elif (((OS_PLATFORM) & 0x00FFFFFF) == 0xAA10)		/* Arria 10										*/
-  volatile uint32_t * const G_EMACaddr[3] = { (volatile uint32_t *)0xFF800000,
-                                              (volatile uint32_t *)0xFF802000,
-                                              (volatile uint32_t *)0xFF804000
-                                            };
-#endif
-
-/* ------------------------------------------------------------------------------------------------ */
-/* The following sections use a lots of macros but it's to reduce the size of the data requirements	*/
-/* by only	creating descriptor / mutexes etc for the devices in use ("1" in ETH_LIST_DEVICE)		*/
-
-#ifndef ETH_MAX_DEVICES
- #if   (((ETH_LIST_DEVICE) & 0x200) != 0U)
-  #define ETH_MAX_DEVICES	10
- #elif (((ETH_LIST_DEVICE) & 0x100) != 0U)
-  #define ETH_MAX_DEVICES	9
- #elif (((ETH_LIST_DEVICE) & 0x080) != 0U)
-  #define ETH_MAX_DEVICES	8
- #elif (((ETH_LIST_DEVICE) & 0x040) != 0U)
-  #define ETH_MAX_DEVICES	7
- #elif (((ETH_LIST_DEVICE) & 0x020) != 0U)
-  #define ETH_MAX_DEVICES	6
- #elif (((ETH_LIST_DEVICE) & 0x010) != 0U)
-  #define ETH_MAX_DEVICES	5
- #elif (((ETH_LIST_DEVICE) & 0x008) != 0U)
-  #define ETH_MAX_DEVICES	4
- #elif (((ETH_LIST_DEVICE) & 0x004) != 0U)
-  #define ETH_MAX_DEVICES	3
- #elif (((ETH_LIST_DEVICE) & 0x002) != 0U)
-  #define ETH_MAX_DEVICES	2
- #elif (((ETH_LIST_DEVICE) & 0x001) != 0U)
-  #define ETH_MAX_DEVICES	1
- #endif
-#endif
-
-/* ------------------------------------------------------------------------------------------------ */
-/* This section figures out how to remap the individual devices specified by ETH_LIST_DEVICE		*/
-/* e.g. if ETH_LIST_DEVICE == 0x12, the only descriptors/mutexes for 2 devices are required and	*/
-/*      device#1 is remapped to [0] and device #4 is remapped to [1]								*/
-
-#if (((ETH_LIST_DEVICE) & 0x001) != 0)
-  #define ETH_CNT_0		0
-  #define ETH_IDX_0		0
-#else
-  #define ETH_CNT_0		(-1)
-  #define ETH_IDX_0		(-1)
-#endif
-#if (((ETH_LIST_DEVICE) & 0x002) != 0)
-  #define ETH_CNT_1		((ETH_CNT_0) + 1)
-  #define ETH_IDX_1		((ETH_CNT_0) + 1)
-#else
-  #define ETH_CNT_1		(ETH_CNT_0)
-  #define ETH_IDX_1		-1
-#endif
-#if (((ETH_LIST_DEVICE) & 0x004) != 0)
-  #define ETH_CNT_2		((ETH_CNT_1) + 1)
-  #define ETH_IDX_2		((ETH_CNT_1) + 1)
-#else
-  #define ETH_CNT_2		(ETH_CNT_1)
-  #define ETH_IDX_2		-1
-#endif
-#if (((ETH_LIST_DEVICE) & 0x008) != 0)
-  #define ETH_CNT_3		((ETH_CNT_2) + 1)
-  #define ETH_IDX_3		((ETH_CNT_2) + 1)
-#else
-  #define ETH_CNT_3		(ETH_CNT_2)
-  #define ETH_IDX_3		-1
-#endif
-#if (((ETH_LIST_DEVICE) & 0x010) != 0)
-  #define ETH_CNT_4		((ETH_CNT_3) + 1)
-  #define ETH_IDX_4		((ETH_CNT_3) + 1)
-#else
-  #define ETH_CNT_4		(ETH_CNT_3)
-  #define ETH_IDX_4		-1
-#endif
-#if (((ETH_LIST_DEVICE) & 0x020) != 0)
-  #define ETH_CNT_5		((ETH_CNT_4) + 1)
-  #define ETH_IDX_5		((ETH_CNT_4) + 1)
-#else
-  #define ETH_CNT_5		(ETH_CNT_4)
-  #define ETH_IDX_5		-1
-#endif
-#if (((ETH_LIST_DEVICE) & 0x040) != 0)
-  #define ETH_CNT_6		((ETH_CNT_5) + 1)
-  #define ETH_IDX_6		((ETH_CNT_5) + 1)
-#else
-  #define ETH_CNT_6		(ETH_CNT_5)
-  #define ETH_IDX_6		-1
-#endif
-#if (((ETH_LIST_DEVICE) & 0x080) != 0)
-  #define ETH_CNT_7		((ETH_CNT_6) + 1)
-  #define ETH_IDX_7		((ETH_CNT_6) + 1)
-#else
-  #define ETH_CNT_7		(ETH_CNT_6)
-  #define ETH_IDX_7		-1
-#endif
-#if (((ETH_LIST_DEVICE) & 0x100) != 0)
-  #define ETH_CNT_8		((ETH_CNT_7) + 1)
-  #define ETH_IDX_8		((ETH_CNT_7) + 1)
-#else
-  #define ETH_CNT_8		(ETH_CNT_7)
-  #define ETH_IDX_8		-1
-#endif
-#if (((ETH_LIST_DEVICE) & 0x200) != 0)
-  #define ETH_CNT_9		((ETH_CNT_8) + 1)
-  #define ETH_IDX_9		((ETH_CNT_8) + 1)
-#else
-  #define ETH_CNT_9		(ETH_CNT_8)
-  #define ETH_IDX_9		-1
-#endif
-
-#define ETH_NMB_DEVICES	((ETH_CNT_9)+1)
-
-/* ------------------------------------------------------------------------------------------------ */
+/*-----------------------------------------------------------*/
 
 static int gmac_mdio_read_ext(int PHYid, int iMacID, int PHYaddr, int PHYreg);
 static int gmac_mdio_write_ext(int PHYid, int iMacID, int PHYaddr, int PHYreg, int PHYval);
@@ -543,55 +408,55 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 	Rate = 10;
 	switch( PHYid )
 	{
-		case PHY_ID_KSZ9021:					/* Extract from the PHY the rate it is at  		*/
-		case PHY_ID_KSZ9031:					/* Same register for 9021 & 9031				*/
-			RegVal = gmac_mdio_read( iMacID, iPHYAddress, PHY_SR_REG_KSZ9021 );
-			RegTmp = ( RegVal >> 4 ) & 7;
-			if( RegTmp & ( 1 << 2 ) )
-			{
-				Rate = 1000;
-			}
-			else if( RegTmp & ( 1 << 1 ) )
-			{
-				Rate = 100;
-			} 
-			if( ( RegVal & ( 1 << 3 ) ) == 0 )			/* If Full Duplex								*/
-			{
-				Rate |= 1; 
-			}
-			break;
-		case PHY_ID_PEF7071:
-			RegVal = gmac_mdio_read( iMacID, iPHYAddress, PHY_SR_REG_PEF7071);
-			RegTmp = RegVal & 3;
-			if( RegTmp == 2 )
-			{
-				Rate = 1000;
-			}
-			else if( RegTmp == 1 )
-			{
-				Rate = 100;
-			} 
-			if( ( RegVal & ( 1 << 3 ) ) == 0 )			/* If Full Duplex								*/
-			{
-				Rate |= 1;
-			}
-			break;
-		case PHY_ID_MARV88E1518:
-			RegVal = gmac_mdio_read( iMacID, iPHYAddress, PHY_SS_REG_88E1518 );
-			RegTmp = ( RegVal >> 14 ) & 3;
-			if( RegTmp == 2 )
-			{
-				Rate = 1000;
-			}
-			else if( RegTmp == 1 )
-			{
-				Rate = 100;
-			}
-			if( ( RegVal & (1<<13)) == 0 )				/* If Full Duplex								*/
-			{
-				Rate |= 1;
-			}
-			break;
+	case PHY_ID_KSZ9021:					/* Extract from the PHY the rate it is at  		*/
+	case PHY_ID_KSZ9031:					/* Same register for 9021 & 9031				*/
+		RegVal = gmac_mdio_read( iMacID, iPHYAddress, PHY_SR_REG_KSZ9021 );
+		RegTmp = ( RegVal >> 4 ) & 7;
+		if( RegTmp & ( 1 << 2 ) )
+		{
+			Rate = 1000;
+		}
+		else if( RegTmp & ( 1 << 1 ) )
+		{
+			Rate = 100;
+		} 
+		if( ( RegVal & ( 1 << 3 ) ) == 0 )			/* If Full Duplex								*/
+		{
+			Rate |= 1; 
+		}
+		break;
+	case PHY_ID_PEF7071:
+		RegVal = gmac_mdio_read( iMacID, iPHYAddress, PHY_SR_REG_PEF7071);
+		RegTmp = RegVal & 3;
+		if( RegTmp == 2 )
+		{
+			Rate = 1000;
+		}
+		else if( RegTmp == 1 )
+		{
+			Rate = 100;
+		} 
+		if( ( RegVal & ( 1 << 3 ) ) == 0 )			/* If Full Duplex								*/
+		{
+			Rate |= 1;
+		}
+		break;
+	case PHY_ID_MARV88E1518:
+		RegVal = gmac_mdio_read( iMacID, iPHYAddress, PHY_SS_REG_88E1518 );
+		RegTmp = ( RegVal >> 14 ) & 3;
+		if( RegTmp == 2 )
+		{
+			Rate = 1000;
+		}
+		else if( RegTmp == 1 )
+		{
+			Rate = 100;
+		}
+		if( ( RegVal & (1<<13)) == 0 )				/* If Full Duplex								*/
+		{
+			Rate |= 1;
+		}
+		break;
 	}
 
 	FreeRTOS_printf( ( "PHY : Link is up at %d Mbps %s duplex\n", Rate & ~1, (Rate & 1) ? "half" : "full" ) );
@@ -616,29 +481,28 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 	gmac_set_emac_interrupt_disable( iMacID, GMAC_INT_DISABLE_TIMESTAMP | GMAC_INT_DISABLE_LPI );
 	writel( MACset, ioaddr + GMAC_CONTROL );					/* Set the MAC Configuration Register			*/
 
-//													/* Config the DMA								*/
-//													/* Set the DMA Bus Mode Register				*/
-//	Register[EMAC_DMA_BUS_REG]= EMAC_DMA_BUS_USP 	/* Use separate PBL								*/
-//	                          | EMAC_DMA_BUS_AAL	/* Address Aligned Beats						*/
-//	                        #ifdef USE_ENHANCED_DMA_DESCRIPTORS
-//	                          | EMAC_DMA_BUS_ATDS	/* Alternate Desc Size							*/
-//	                        #endif
-//	                          | EMAC_DMA_BUS_EIGHTXPBL
-//	                          | ((8 << EMAC_DMA_BUS_PBL_SHF)  & EMAC_DMA_BUS_PBL)
-//	                          | ((8 << EMAC_DMA_BUS_RPBL_SHF) & EMAC_DMA_BUS_RPBL);
-//													/* Set the DMA Operation Mode Register			*/
-//	Register[EMAC_DMA_OPMODE_REG] = EMAC_DMA_OPMODE_OSF		/* Operate on 2nd Frame					*/
-//	                              | EMAC_DMA_OPMODE_TSF		/* TX Store and Forward					*/
-//	                              | EMAC_DMA_OPMODE_RSF;	/* RX Store and Forward					*/
-//
-//	Register[EMAC_DMA_AXI_BUS_REG] = 0; 			/* Clear everything								*/
+	writel( DMA_BUS_MODE_USP 	/* Use separate PBL. */
+	        | DMA_BUS_MODE_AAL	/* Address Aligned Beats. */
+	    #ifdef USE_ENHANCED_DMA_DESCRIPTORS
+	        | DMA_BUS_MODE_ATDS	/* Alternate Desc Size. */
+	    #endif
+			| DMA_BUS_MODE_MAXPBL
+			| ( ( 8 << DMA_BUS_MODE_PBL_SHIFT )  & DMA_BUS_MODE_PBL_MASK )
+			| ( ( 8 << DMA_BUS_MODE_RPBL_SHIFT ) & DMA_BUS_MODE_RPBL_MASK ),
+			ioaddr + DMA_BUS_MODE );
+
+	/* Set the DMA Operation Mode Register			*/
+	writel( DMA_CONTROL_OSF			/* Operate on 2nd Frame					*/
+	        | DMA_CONTROL_TSF		/* TX Store and Forward					*/
+	        | DMA_CONTROL_RSF,		/* RX Store and Forward					*/
+			ioaddr + DMA_CONTROL );	/* Operational mode. */
+
+	writel( 0ul, ioaddr + DMA_AXI_BUS_MODE); 			/* Clear everything								*/
 
 	return Rate;
 }
+/*-----------------------------------------------------------*/
 
-/* ------------------------------------------------------------------------------------------------ */
-
-/* ------------------------------------------------------------------------------------------------ */
 /* Read a PHY extended register																		*/
 
 static int gmac_mdio_read_ext(int PHYid, int iMacID, int PHYaddr, int PHYreg)
@@ -658,9 +522,9 @@ static int gmac_mdio_read_ext(int PHYid, int iMacID, int PHYaddr, int PHYreg)
 	}
 	return 0;
 }
+/*-----------------------------------------------------------*/
 
-/* ------------------------------------------------------------------------------------------------ */
-/* Write to a PHY extended register																	*/
+/* Write to a PHY extended register. */
 
 static int gmac_mdio_write_ext(int PHYid, int iMacID, int PHYaddr, int PHYreg, int PHYval)
 {
@@ -680,3 +544,4 @@ int RetVal;
 	}
     return(RetVal);
 }
+/*-----------------------------------------------------------*/

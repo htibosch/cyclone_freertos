@@ -75,6 +75,7 @@
 void vParTestInitialise( void );
 void vParTestSetLED( UBaseType_t uxLED, BaseType_t xValue );
 void vParTestToggleLED( UBaseType_t uxLED );
-
+void vSetLED( BaseType_t xValue );
+void vToggleLED( void );
 #endif
 

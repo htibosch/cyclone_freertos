@@ -55,6 +55,13 @@
 #define GMAC_CORE_INIT (GMAC_CONTROL_JD | GMAC_CONTROL_PS | GMAC_CONTROL_ACS | \
 			GMAC_CONTROL_BE | GMAC_CONTROL_DCRS)
 
+#define GMAC_MMC_CTRL              0x100
+#define GMAC_MMC_RX_INTR           0x104
+#define GMAC_MMC_TX_INTR           0x108
+#define GMAC_MMC_RX_INTR_MASK      0x10C
+#define GMAC_MMC_TX_INTR_MASK      0x110
+
+#define GMAC_MMC_RX_CSUM_OFFLOAD   0x208
 
 /* SGMII/RGMII status register */
 #define GMAC_RGSMIIIS_LNKMODE		BIT(0)

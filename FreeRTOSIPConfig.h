@@ -156,6 +156,7 @@ things such as a DHCP transaction number or initial sequence number.  Random
 number generation is performed via this macro to allow applications to use their
 own random number generation method.  For example, it might be possible to
 generate a random number by sampling noise on an analogue input. */
+extern void vSRand( UBaseType_t ulSeed );
 extern UBaseType_t uxRand( void );
 #define ipconfigRAND32()	uxRand()
 
