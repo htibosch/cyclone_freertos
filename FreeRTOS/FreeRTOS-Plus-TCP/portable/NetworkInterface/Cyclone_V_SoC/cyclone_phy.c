@@ -268,12 +268,14 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 		gmac_mdio_write( iMacID, iPHYAddress, PHY_PAGE_ADDR_REG_88E1518, 0);
 		break;
 	}
-													/* Prepare to configure the MAC					*/
-	MACset = GMAC_CONTROL_IPC							/* Checksum Offload								*/
-	       | GMAC_CONTROL_JD							/* Jabber Disable								*/
-	       | GMAC_CONTROL_PS							/* Port Select = MII							*/
-	       | GMAC_CONTROL_BE							/* Frame Burst Enable							*/
-	       | GMAC_CONTROL_WD;							/* Watchdog Disable								*/
+									/* Prepare to configure the MAC */
+	MACset =  GMAC_CONTROL_IPC		/* Checksum Offload */
+			| GMAC_CONTROL_JD		/* Jabber Disable */
+			| GMAC_CONTROL_PS		/* Port Select = MII */
+			| GMAC_CONTROL_BE		/* Frame Burst Enable */
+			| GMAC_CONTROL_DCRS		/* Disable carrier sense ( half-duplex option ) */
+			| GMAC_CONTROL_ACS;		/* Enable Automatic Pad CRC Stripping */
+//			| GMAC_CONTROL_WD;		/* Watchdog Disable */
 
 	if( Rate >= 0 )								/* Request to set the Ethernet speed			*/
 	{
@@ -477,18 +479,15 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 
 	/* Just read the PHY Control Status register. */
 	if( readl( ioaddr + GMAC_RGSMIIIS ) ) {}
-													/* Disable MAC interrupts						*/
+
+	/* Disable MAC interrupts						*/
 	gmac_set_emac_interrupt_disable( iMacID, GMAC_INT_DISABLE_TIMESTAMP | GMAC_INT_DISABLE_LPI );
 	writel( MACset, ioaddr + GMAC_CONTROL );					/* Set the MAC Configuration Register			*/
 
-	writel( DMA_BUS_MODE_USP 	/* Use separate PBL. */
-	        | DMA_BUS_MODE_AAL	/* Address Aligned Beats. */
-	    #ifdef USE_ENHANCED_DMA_DESCRIPTORS
-	        | DMA_BUS_MODE_ATDS	/* Alternate Desc Size. */
-	    #endif
+	writel( DMA_BUS_MODE_ATDS	/* Alternate Desc Size. */
 			| DMA_BUS_MODE_MAXPBL
 			| ( ( 8 << DMA_BUS_MODE_PBL_SHIFT )  & DMA_BUS_MODE_PBL_MASK )
-			| ( ( 8 << DMA_BUS_MODE_RPBL_SHIFT ) & DMA_BUS_MODE_RPBL_MASK ),
+			| ( ( 1 << DMA_BUS_MODE_RPBL_SHIFT ) & DMA_BUS_MODE_RPBL_MASK ),
 			ioaddr + DMA_BUS_MODE );
 
 	/* Set the DMA Operation Mode Register			*/
@@ -497,7 +496,9 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 	        | DMA_CONTROL_RSF,		/* RX Store and Forward					*/
 			ioaddr + DMA_CONTROL );	/* Operational mode. */
 
-	writel( 0ul, ioaddr + DMA_AXI_BUS_MODE); 			/* Clear everything								*/
+	writel( ( 1 << DMA_AXI_WR_OSR_LMT_SHIFT ) |
+			( 1 << DMA_AXI_RD_OSR_LMT_SHIFT ),
+			ioaddr + DMA_AXI_BUS_MODE );
 
 	return Rate;
 }

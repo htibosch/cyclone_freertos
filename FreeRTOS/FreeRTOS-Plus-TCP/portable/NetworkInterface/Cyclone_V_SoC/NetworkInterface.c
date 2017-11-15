@@ -70,6 +70,7 @@
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_Sockets.h"
 #include "FreeRTOS_IP_Private.h"
+#include "FreeRTOS_DNS.h"
 #include "NetworkBufferManagement.h"
 #include "NetworkInterface.h"
 
@@ -97,6 +98,9 @@ expansion. */
 
 #define NETWORK_BUFFERS_CACHED	1
 #define NETWORK_BUFFER_HEADER_SIZE	( ipconfigPACKET_FILLER_SIZE + 8 )
+
+/* The bits in the two byte IP header field that make up the fragment offset value. */
+#define ipFRAGMENT_OFFSET_BIT_MASK				( FreeRTOS_ntohs( ( ( uint16_t ) 0x0fff ) ) )
 
 #define niBMSR_LINK_STATUS         0x0004ul
 
@@ -450,7 +454,6 @@ ulLastDMAStatus = ulDMAStatus;
 			if (readl(ioaddr + offset)) {}
 			offset += 4;
 		}
-		if (readl(ioaddr + 0x250)) {}
 		gmac_clear_dma_interrupt_status( iInterruptMacID, DMA_STATUS_GMI );
 		gmac_clear_emac_interrupt_status( iInterruptMacID, 0x000000F0 );
 	}
@@ -765,7 +768,7 @@ const ProtocolPacket_t *pxProtPacket = ( const ProtocolPacket_t * )pcBuffer;
 
 		/* Ensure that the incoming packet is not fragmented (only outgoing packets
 		 * can be fragmented) as these are the only handled IP frames currently. */
-		if( ( pxIPHeader->usFragmentOffset & FreeRTOS_ntohs( ipFRAGMENT_OFFSET_BIT_MASK ) ) != 0U )
+		if( ( pxIPHeader->usFragmentOffset & ipFRAGMENT_OFFSET_BIT_MASK ) != 0U )
 		{
 			return pdFALSE;
 		}
@@ -877,7 +880,7 @@ BaseType_t xResult = -1;
 			pxFrame->LSRxDesc = pxDescriptor;
 
 			/* Get the Frame Length of the received packet: substruct 4 bytes of the CRC */
-			pxFrame->length = pxDescriptor->buf1_byte_count;
+			pxFrame->length = pxDescriptor->frame_length - 4;
 
 			/* Get the address of the buffer start address */
 			pxFrame->buffer = pxDescriptor->buf1_address;
@@ -946,11 +949,28 @@ NetworkBufferDescriptor_t *pxNewNetworkBuffer = NULL;
 	if( xReceivedLength > 0 )
 	{
 		pucBuffer = ( uint8_t * )frameInfo.buffer;
+		#if( NETWORK_BUFFERS_CACHED	!= 0 )
+		{
+			if( pucBuffer != NULL )
+			{
+			BaseType_t xlength = ALT_CACHE_LINE_SIZE * ( ( xReceivedLength + NETWORK_BUFFER_HEADER_SIZE + ALT_CACHE_LINE_SIZE - 1 ) / ALT_CACHE_LINE_SIZE );
+			uint32_t *ptr = ( uint32_t * )( pucBuffer - NETWORK_BUFFER_HEADER_SIZE );
+			uint32_t ulStore[ 2 ];
+
+				ulStore[ 0 ] = ptr[ 0 ];
+				ulStore[ 1 ] = ptr[ 1 ];
+				alt_cache_system_invalidate( pucBuffer - NETWORK_BUFFER_HEADER_SIZE, xlength );
+				ptr[ 0 ] = ulStore[ 0 ];
+				ptr[ 1 ] = ulStore[ 1 ];
+			}
+		}
+		#endif
 
 		/* Update the ETHERNET DMA global Rx descriptor with next Rx descriptor */
 		/* Chained Mode */    
 		/* Selects the next DMA Rx descriptor list for next buffer to read */ 
 		pxRxDescriptor = ( gmac_rx_descriptor_t* )frameInfo.FSRxDesc;
+eventLogAdd("RX Recv  %d (%lu)", (int)(pxRxDescriptor - rxDescriptors), xReceivedLength);
 
 		/* In order to make the code easier and faster, only packets in a single buffer
 		will be accepted.  This can be done by making the buffers large enough to
@@ -981,23 +1001,6 @@ NetworkBufferDescriptor_t *pxNewNetworkBuffer = NULL;
 				xAccepted = pdFALSE;
 			}
 		}
-
-		#if( NETWORK_BUFFERS_CACHED	!= 0 )
-		{
-			if( pucBuffer != NULL )
-			{
-			BaseType_t xlength = ALT_CACHE_LINE_SIZE * ( ( xReceivedLength + NETWORK_BUFFER_HEADER_SIZE + ALT_CACHE_LINE_SIZE - 1 ) / ALT_CACHE_LINE_SIZE );
-			uint32_t *ptr = ( uint32_t * )( pucBuffer - NETWORK_BUFFER_HEADER_SIZE );
-			uint32_t ulStore[ 2 ];
-
-				ulStore[ 0 ] = ptr[ 0 ];
-				ulStore[ 1 ] = ptr[ 1 ];
-				alt_cache_system_invalidate( pucBuffer - NETWORK_BUFFER_HEADER_SIZE, xlength );
-				ptr[ 0 ] = ulStore[ 0 ];
-				ptr[ 1 ] = ulStore[ 1 ];
-			}
-		}
-		#endif
 
 		#if( ipconfigZERO_COPY_RX_DRIVER != 0 )
 		{
@@ -1061,7 +1064,6 @@ NetworkBufferDescriptor_t *pxNewNetworkBuffer = NULL;
 		if( pxNewNetworkBuffer != NULL )
 		{
 			pxRxDescriptor->buf1_address = (uint32_t)pxNewNetworkBuffer->pucEthernetBuffer;
-eventLogAdd("RX Recv  %d (%lu)", (int)(pxRxDescriptor - rxDescriptors), xReceivedLength);
 		}
 		else
 		{

@@ -612,7 +612,11 @@ extern BaseType_t xPlusTCPStarted;
 								int_count[3],
 								int_count[4]);
 					}
-					if( strncmp( cBuffer, "emac", 4 ) == 0 )
+					if( strncmp( cBuffer, "emacreg", 7 ) == 0 )
+					{
+						show_emac();
+					}
+					if( strncmp( cBuffer, "emacbuf", 7 ) == 0 )
 					{
 						emac_show_buffers();
 					}
@@ -639,12 +643,6 @@ extern BaseType_t xPlusTCPStarted;
 					if( strncmp( cBuffer, "list", 4 ) == 0 )
 					{
 						vShowTaskTable( cBuffer[ 4 ] == 'c' );
-					}
-					{
-//						if( strncmp( cBuffer, "emac", 4 ) == 0 )
-//						{
-//							show_emac();
-//						}
 					}
 
 					if( strncmp( cBuffer, "netstat", 7 ) == 0 )
@@ -1161,7 +1159,7 @@ uint32_t offset;
 	FreeRTOS_printf( ( "ST GMAC Registers\n" ) );
 	FreeRTOS_printf( ( "GMAC Registers at 0x%08X\n", ( uint32_t )pulMAC_Config ) );
 
-	for( index = 0; index < 55; index++ )
+	for( index = 0; index < 16/*55*/; index++ )
 	{
 	uint32_t value;
 
@@ -1170,7 +1168,7 @@ uint32_t offset;
 		} else {
 			value = pulMAC_Config[ index ];
 		}
-		FreeRTOS_printf( ( "Reg%d  0x%08X\n", index, value ) );
+		FreeRTOS_printf( ( "Reg%02d  0x%08X\n", index, value ) );
 		vTaskDelay( 60 );
 	}
 
@@ -1187,7 +1185,7 @@ uint32_t offset;
 	{
 	uint32_t value = pulMAC_Config[ index ];
 
-		FreeRTOS_printf( ( "Reg%d  0x%08X\n", index, value ) );
+		FreeRTOS_printf( ( "Reg%02d  0x%08X\n", index, value ) );
 		vTaskDelay( 60 );
 	}
 	// ======================================================================

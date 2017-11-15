@@ -247,7 +247,7 @@ to a pre-determinable value. */
 
 /* Optimisation that allows more than one Rx buffer to be passed to the TCP task
 at a time - requires driver support. */
-#define ipconfigUSE_LINKED_RX_MESSAGES				( 0 )
+#define ipconfigUSE_LINKED_RX_MESSAGES				( 1 )
 
 #define ipconfigNUM_NETWORK_BUFFER_DESCRIPTORS		( 40 )
 
@@ -467,6 +467,9 @@ messages. */
 #define ipconfigENDPOINT_DNS_ADDRESS_COUNT		( 2 )
 
 //#define ipconfigETHERNET_MINIMUM_PACKET_BYTES	( 64 )
+
+/* Let the driver filter the packets instead of the IP-task. */
+#define	ipconfigETHERNET_DRIVER_FILTERS_PACKETS		1
 
 #ifdef __cplusplus
 } /* extern "C" */
