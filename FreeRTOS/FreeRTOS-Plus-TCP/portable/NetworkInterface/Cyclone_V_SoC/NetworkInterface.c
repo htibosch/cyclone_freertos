@@ -88,9 +88,7 @@ expansion. */
 
 #include "cyclone_dma.h"
 #include "cyclone_emac.h"
-
-/* Provided memory configured as uncached. */
-#include "uncached_memory.h"
+#include "cyclone_phy.h"
 
 #include "socal/alt_emac.h"
 
@@ -293,7 +291,12 @@ BaseType_t xLinkStatus;
 			configASSERT( xTXDescriptorSemaphore );
 		}
 
-		dwmac1000_sys_init( iMacID );
+		gmac_init( iMacID );
+
+		cyclone_phy_init( iMacID, -1 );
+
+		/* Write the main MAC address at position 0 */
+		gmac_set_MAC_address( iMacID, ucMACAddress, 0 );
 
 		gmac_dma_stop_tx( iMacID, 0 );
 		gmac_dma_stop_rx( iMacID, 0 );
@@ -314,7 +317,6 @@ alt_cache_l2_sync();
 		gmac_enable_transmission( iMacID, pdTRUE );
 
 		gmac_dma_reception_poll( iMacID );
-//		gmac_dma_start_rx( iMacID, 0 );
 
 		prvGMACWaitLS( xWaitLinkDelay );
 
@@ -937,7 +939,9 @@ int gmac_check_rx()
 {
 FrameInfo_t frameInfo;
 BaseType_t xReceivedLength, xAccepted;
-xIPStackEvent_t xRxEvent = { eNetworkRxEvent, NULL };
+#if( ipconfigUSE_LINKED_RX_MESSAGES == 0 )
+	xIPStackEvent_t xRxEvent = { eNetworkRxEvent, NULL };
+#endif
 const TickType_t xDescriptorWaitTime = pdMS_TO_TICKS( 250 );
 uint8_t *pucBuffer;
 gmac_rx_descriptor_t *pxRxDescriptor;

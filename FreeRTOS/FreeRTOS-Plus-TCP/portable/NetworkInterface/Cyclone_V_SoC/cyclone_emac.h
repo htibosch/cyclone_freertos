@@ -16,10 +16,10 @@
 
 /* SGMII/RGMII status register */
 #define GMAC_RGSMIIIS_LNKMODE		BIT(0)
-#define GMAC_RGSMIIIS_SPEED		GENMASK(2, 1)
+#define GMAC_RGSMIIIS_SPEED			GENMASK(2, 1)
 #define GMAC_RGSMIIIS_SPEED_SHIFT	1
 #define GMAC_RGSMIIIS_LNKSTS		BIT(3)
-#define GMAC_RGSMIIIS_JABTO		BIT(4)
+#define GMAC_RGSMIIIS_JABTO			BIT(4)
 #define GMAC_RGSMIIIS_FALSECARDET	BIT(5)
 #define GMAC_RGSMIIIS_SMIDRXS		BIT(16)
 /* LNKMOD */
@@ -43,8 +43,8 @@
 #define GMAC_PCS_BASE		0x000000c0	/* PCS register base */
 #define GMAC_RGSMIIIS		0x000000d8	/* RGMII/SMII status */
 
-#define GMAC_INT_STATUS		0x00000038	/* interrupt status register */
-#define GMAC_INT_STATUS_PMT	BIT(3)
+#define GMAC_INT_STATUS			0x00000038	/* interrupt status register */
+#define GMAC_INT_STATUS_PMT		BIT(3)
 #define GMAC_INT_STATUS_MMCIS	BIT(4)
 #define GMAC_INT_STATUS_MMCRIS	BIT(5)
 #define GMAC_INT_STATUS_MMCTIS	BIT(6)
@@ -62,22 +62,6 @@
 #define GMAC_MMC_TX_INTR_MASK      0x110
 
 #define GMAC_MMC_RX_CSUM_OFFLOAD   0x208
-
-/* SGMII/RGMII status register */
-#define GMAC_RGSMIIIS_LNKMODE		BIT(0)
-#define GMAC_RGSMIIIS_SPEED		GENMASK(2, 1)
-#define GMAC_RGSMIIIS_SPEED_SHIFT	1
-#define GMAC_RGSMIIIS_LNKSTS		BIT(3)
-#define GMAC_RGSMIIIS_JABTO		BIT(4)
-#define GMAC_RGSMIIIS_FALSECARDET	BIT(5)
-#define GMAC_RGSMIIIS_SMIDRXS		BIT(16)
-/* LNKMOD */
-#define GMAC_RGSMIIIS_LNKMOD_MASK	0x1
-/* LNKSPEED */
-#define GMAC_RGSMIIIS_SPEED_125		0x2
-#define GMAC_RGSMIIIS_SPEED_25		0x1
-#define GMAC_RGSMIIIS_SPEED_2_5		0x0
-
 
 /* GMAC Configuration defines */
 #define GMAC_CONTROL_2K 0x08000000	/* IEEE 802.3as 2K packets */
@@ -106,18 +90,17 @@ enum inter_frame_gap {
 #define GMAC_CONTROL_RE		0x00000004	/* Receiver Enable */
 
 /* interrupt mask register */
-#define	GMAC_INT_MASK		0x0000003c
+#define	GMAC_INT_MASK				0x0000003c
 #define	GMAC_INT_DISABLE_RGMII		BIT(0)
 #define	GMAC_INT_DISABLE_PCSLINK	BIT(1)
 #define	GMAC_INT_DISABLE_PCSAN		BIT(2)
 #define	GMAC_INT_DISABLE_PMT		BIT(3)
 #define	GMAC_INT_DISABLE_TIMESTAMP	BIT(9)
 #define	GMAC_INT_DISABLE_LPI		BIT(10)
-#define	GMAC_INT_DISABLE_PCS	(GMAC_INT_DISABLE_RGMII | \
-				 GMAC_INT_DISABLE_PCSLINK | \
-				 GMAC_INT_DISABLE_PCSAN)
-#define	GMAC_INT_DEFAULT_MASK	(GMAC_INT_DISABLE_TIMESTAMP | \
-				 GMAC_INT_DISABLE_PCS)
+#define	GMAC_INT_DISABLE_PCS		( GMAC_INT_DISABLE_RGMII | \
+									  GMAC_INT_DISABLE_PCSLINK | \
+									  GMAC_INT_DISABLE_PCSAN )
+#define	GMAC_INT_DEFAULT_MASK		( GMAC_INT_DISABLE_TIMESTAMP | GMAC_INT_DISABLE_PCS )
 
 /* GMAC TX FIFO is 8K, Rx FIFO is 16K */
 #define BUF_SIZE_16KiB 16384
@@ -153,7 +136,7 @@ enum inter_frame_gap {
 /* LPI control and status defines */
 #define LPI_CTRL_STATUS_LPITXA	0x00080000	/* Enable LPI TX Automate */
 #define LPI_CTRL_STATUS_PLSEN	0x00040000	/* Enable PHY Link Status */
-#define LPI_CTRL_STATUS_PLS	0x00020000	/* PHY Link Status */
+#define LPI_CTRL_STATUS_PLS		0x00020000	/* PHY Link Status */
 #define LPI_CTRL_STATUS_LPIEN	0x00010000	/* LPI Enable */
 #define LPI_CTRL_STATUS_RLPIST	0x00000200	/* Receive LPI state */
 #define LPI_CTRL_STATUS_TLPIST	0x00000100	/* Transmit LPI state */
@@ -163,7 +146,7 @@ enum inter_frame_gap {
 #define LPI_CTRL_STATUS_TLPIEN	0x00000001	/* Transmit LPI Entry */
 
 /* MAC HW ADDR regs */
-#define GMAC_HI_DCS			GENMASK(18, 16)
+#define GMAC_HI_DCS				GENMASK(18, 16)
 #define GMAC_HI_DCS_SHIFT		16
 #define GMAC_HI_REG_AE			BIT(31)
 
@@ -180,7 +163,7 @@ enum inter_frame_gap {
 #define GMAC_ANE_ADV(x)		(x + 0x8)	/* ANE Advertisement */
 #define GMAC_ANE_LPA(x)		(x + 0xc)	/* ANE link partener ability */
 #define GMAC_ANE_EXP(x)		(x + 0x10)	/* ANE expansion */
-#define GMAC_TBI(x)		(x + 0x14)	/* TBI extend status */
+#define GMAC_TBI(x)			(x + 0x14)	/* TBI extend status */
 
 /* AN Configuration defines */
 #define GMAC_AN_CTRL_RAN	BIT(9)	/* Restart Auto-Negotiation */
@@ -197,8 +180,8 @@ enum inter_frame_gap {
 #define GMAC_AN_STATUS_ES	BIT(8)	/* Extended Status */
 
 /* ADV and LPA defines */
-#define GMAC_ANE_FD		BIT(5)
-#define GMAC_ANE_HD		BIT(6)
+#define GMAC_ANE_FD			BIT(5)
+#define GMAC_ANE_HD			BIT(6)
 #define GMAC_ANE_PSE		GENMASK(8, 7)
 #define GMAC_ANE_PSE_SHIFT	7
 #define GMAC_ANE_RFE		GENMASK(13, 12)
@@ -282,9 +265,8 @@ struct xSYSMGR_EMACGRP {
 
 typedef struct xSYSMGR_EMACGRP SYSMGR_EMACGRP_t;
 
-void dwmac1000_sys_init( int iMacID );
-void dwmac1000_rgsmii(int iMacID, EMACStats_t *pxStats);
-void dwmac1000_core_init(int iMacID, int iSpeed, int mtu);
+void gmac_init( int iMacID );
+void gmac_set_MAC_address(int iMacID, const uint8_t *ucMACAddress, uint32_t ulIndex );
 
 /* Enable disable MAC RX/TX */
 void gmac_enable_transmission(int iMacID, bool enable);
@@ -321,8 +303,6 @@ static __inline void writel( uint32_t ulValue, uint8_t *pucAddress )
 {
 	*( ( volatile uint32_t *) pucAddress ) = ( volatile uint32_t )ulValue;
 }
-
-extern uint32_t ulUsePHYAddress;
 
 int gmac_mdio_read( int iMacID, int phyaddr, int phyreg);
 

@@ -18,5 +18,7 @@
 /* ------------------------------------------------------------------------------------------------ */
 int cyclone_phy_init( int iMacID, int Rate );
 
+extern uint32_t ulUsePHYAddress;
+
 
 #endif

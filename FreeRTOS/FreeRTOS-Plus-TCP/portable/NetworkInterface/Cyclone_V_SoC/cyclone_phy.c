@@ -138,6 +138,8 @@
 
 /*-----------------------------------------------------------*/
 
+uint32_t ulUsePHYAddress;
+
 static int gmac_mdio_read_ext(int PHYid, int iMacID, int PHYaddr, int PHYreg);
 static int gmac_mdio_write_ext(int PHYid, int iMacID, int PHYaddr, int PHYreg, int PHYval);
 
@@ -204,6 +206,7 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 		FreeRTOS_printf( ( "PHY : No recognized PHY found\n" ) );
 		return -1;
 	}
+	ulUsePHYAddress = iPHYAddress;
 													/* Marvell validates 1000BASE-T settings after	*/
 	if( Rate >= 1000 )								/* a reset only. Do this for all PHY			*/
 	{

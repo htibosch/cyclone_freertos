@@ -27,16 +27,13 @@
 
 #include "socal/alt_emac.h"
 
-void dwmac1000_dma_axi( int iMacID, struct stmmac_axi *axi)
+void gmac_dma_axi( int iMacID, struct stmmac_axi *axi)
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 int i;
 
 	value = readl(ioaddr + DMA_AXI_BUS_MODE);
-
-	lUDPLoggingPrintf("dwmac1000: Master AXI performs %s burst length\n",
-		!(value & DMA_AXI_UNDEF) ? "fixed" : "any");
 
 	if (axi->axi_lpi_en)
 	{
@@ -58,8 +55,10 @@ int i;
 	 * length according to the BLEN programmed (by default all BLEN are
 	 * set).
 	 */
-	for (i = 0; i < AXI_BLEN; i++) {
-		switch (axi->axi_blen[i]) {
+	for( i = 0; i < AXI_BLEN; i++ )
+	{
+		switch( axi->axi_blen[ i ] )
+		{
 		case 256:
 			value |= DMA_AXI_BLEN256;
 			break;
@@ -84,10 +83,10 @@ int i;
 		}
 	}
 
-	writel(value, ioaddr + DMA_AXI_BUS_MODE);
+	writel( value, ioaddr + DMA_AXI_BUS_MODE );
 }
 
-void dwmac1000_dma_init( int iMacID, struct stmmac_dma_cfg *dma_cfg )
+void gmac_dma_init( int iMacID, struct stmmac_dma_cfg *dma_cfg )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
@@ -173,10 +172,10 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
 	/* DMA_CONTROL, also called Operation Mode. */
-	value = readl(ioaddr + DMA_CONTROL);
+	value = readl( ioaddr + DMA_CONTROL );
 	/* Transmission in Run State */
 	value |= DMA_CONTROL_ST;
-	writel(value, ioaddr + DMA_CONTROL);
+	writel( value, ioaddr + DMA_CONTROL );
 }
 
 void gmac_dma_stop_tx( int iMacID, uint32_t chan )
@@ -184,10 +183,10 @@ void gmac_dma_stop_tx( int iMacID, uint32_t chan )
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
-	value = readl(ioaddr + DMA_CONTROL);
+	value = readl( ioaddr + DMA_CONTROL );
 	/* Transmission Stopped State */
 	value &= ~DMA_CONTROL_ST;
-	writel(value, ioaddr + DMA_CONTROL);
+	writel( value, ioaddr + DMA_CONTROL );
 }
 
 void gmac_dma_start_rx( int iMacID, uint32_t chan )
@@ -195,10 +194,10 @@ void gmac_dma_start_rx( int iMacID, uint32_t chan )
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
-	value = readl(ioaddr + DMA_CONTROL);
+	value = readl( ioaddr + DMA_CONTROL );
 	/* Rx DMA operation is started */
 	value |= DMA_CONTROL_SR;
-	writel(value, ioaddr + DMA_CONTROL);
+	writel( value, ioaddr + DMA_CONTROL );
 }
 
 void gmac_dma_stop_rx( int iMacID, uint32_t chan )
@@ -206,13 +205,13 @@ void gmac_dma_stop_rx( int iMacID, uint32_t chan )
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t value;
 
-	value = readl(ioaddr + DMA_CONTROL);
+	value = readl( ioaddr + DMA_CONTROL );
 	/* Rx DMA operation is stopped */
 	value &= ~DMA_CONTROL_SR;
-	writel(value, ioaddr + DMA_CONTROL);
+	writel( value, ioaddr + DMA_CONTROL );
 }
 
-static uint32_t dwmac1000_configure_fc(uint32_t csr6 )
+static uint32_t gmac_configure_fc(uint32_t csr6 )
 {
 	csr6 &= ~DMA_CONTROL_RFA_MASK;
 	csr6 &= ~DMA_CONTROL_RFD_MASK;
@@ -228,12 +227,13 @@ static uint32_t dwmac1000_configure_fc(uint32_t csr6 )
 	return csr6;
 }
 
-void dwmac1000_dma_operation_mode( int iMacID, int txmode, int rxmode )
+void gmac_dma_operation_mode( int iMacID, int txmode, int rxmode )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
-uint32_t csr6 = readl(ioaddr + DMA_CONTROL);
+uint32_t csr6 = readl( ioaddr + DMA_CONTROL );
 
-	if (txmode == SF_DMA_MODE) {
+	if( txmode == SF_DMA_MODE )
+	{
 		lUDPLoggingPrintf("GMAC: enable TX store and forward mode\n");
 		/* Transmit COE type 2 cannot be done in cut-through mode. */
 		csr6 |= DMA_CONTROL_TSF;
@@ -241,7 +241,9 @@ uint32_t csr6 = readl(ioaddr + DMA_CONTROL);
 		 * especially when transmit store-and-forward is used.
 		 */
 		csr6 |= DMA_CONTROL_OSF;
-	} else {
+	}
+	else
+	{
 		lUDPLoggingPrintf("GMAC: disabling TX SF (threshold %d)\n", txmode);
 		csr6 &= ~DMA_CONTROL_TSF;
 		csr6 &= DMA_CONTROL_TC_TX_MASK;
@@ -258,10 +260,13 @@ uint32_t csr6 = readl(ioaddr + DMA_CONTROL);
 			csr6 |= DMA_CONTROL_TTC_256;
 	}
 
-	if (rxmode == SF_DMA_MODE) {
+	if( rxmode == SF_DMA_MODE )
+	{
 		lUDPLoggingPrintf("GMAC: enable RX store and forward mode\n");
 		csr6 |= DMA_CONTROL_RSF;
-	} else {
+	}
+	else
+	{
 		lUDPLoggingPrintf("GMAC: disable RX SF mode (threshold %d)\n", rxmode);
 		csr6 &= ~DMA_CONTROL_RSF;
 		csr6 &= DMA_CONTROL_TC_RX_MASK;
@@ -276,11 +281,11 @@ uint32_t csr6 = readl(ioaddr + DMA_CONTROL);
 	}
 
 	/* Configure flow control based on rx fifo size */
-	csr6 = dwmac1000_configure_fc(csr6);
+	csr6 = gmac_configure_fc( csr6 );
 
-	writel(csr6, ioaddr + DMA_CONTROL);
+	writel( csr6, ioaddr + DMA_CONTROL );
 
-	writel(255, ioaddr + DMA_RX_WATCHDOG);
+	writel( 255, ioaddr + DMA_RX_WATCHDOG );
 }
 
 /* CSR1 enables the transmit DMA to check for new descriptor */
@@ -347,7 +352,7 @@ gmac_tx_descriptor_t *pxDMADescriptor;
 	memset( pxDMATable, '\0', ulBufferCount * sizeof( *pxDMATable ) );
 
 	/* Fill each DMA descriptor with the right values */
-	for( i=0; i < ulBufferCount; i++ )
+	for( i = 0; i < ulBufferCount; i++ )
 	{
 		/* Get the pointer on the ith member of the descriptor list */
 		pxDMADescriptor = pxDMATable + i;
@@ -466,6 +471,7 @@ uint32_t gmac_clear_dma_interrupt_status( int iMacID, uint32_t ulMask )
 {
 uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 uint32_t ulValue;
+
 	/* Write one's to clear all bits. */
 	writel( ulMask, ioaddr + DMA_STATUS );
 	ulValue = readl( ioaddr + DMA_STATUS );

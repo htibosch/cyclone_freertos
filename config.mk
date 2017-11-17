@@ -143,7 +143,6 @@ C_SRCS += \
 	$(PLUS_TCP_PATH)/portable/NetworkInterface/Cyclone_V_SoC/cyclone_dma.c \
 	$(PLUS_TCP_PATH)/portable/NetworkInterface/Cyclone_V_SoC/cyclone_emac.c \
 	$(PLUS_TCP_PATH)/portable/NetworkInterface/Cyclone_V_SoC/cyclone_phy.c \
-	$(PLUS_TCP_PATH)/portable/NetworkInterface/Cyclone_V_SoC/uncached_memory.c \
 	$(PLUS_TCP_PATH)/portable/BufferManagement/BufferAllocation_1.c
 
 ifeq ($(USE_USART),true)

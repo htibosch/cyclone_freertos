@@ -433,10 +433,10 @@ struct stmmac_dma_cfg
 	bool aal;
 };
 
-extern void dwmac1000_dma_axi( int iMacID, struct stmmac_axi *axi );
-extern void dwmac1000_dma_init( int iMacID, struct stmmac_dma_cfg *dma_cfg );
+extern void gmac_dma_axi( int iMacID, struct stmmac_axi *axi );
+extern void gmac_dma_init( int iMacID, struct stmmac_dma_cfg *dma_cfg );
 
-extern void dwmac1000_dma_operation_mode( int iMacID, int txmode, int rxmode );
+extern void gmac_dma_operation_mode( int iMacID, int txmode, int rxmode );
 
 extern void gmac_set_dma_interrupt_enable( int iMacID, uint32_t ulMask );
 extern uint32_t gmac_get_dma_interrupt_status( int iMacID, int iClear );

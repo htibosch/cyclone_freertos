@@ -357,12 +357,12 @@ disconnecting stage will timeout after a period of non-activity. */
 #define ipconfigTCP_KEEP_ALIVE				( 1 )
 #define ipconfigTCP_KEEP_ALIVE_INTERVAL		( 20 ) /* in seconds */
 
-/* Zynq driver specific parameters */
-#define ipconfigNIC_INCLUDE_GEM				( 1 )
-#define ipconfigNIC_N_TX_DESC				( 32 )
-#define ipconfigNIC_N_RX_DESC				( 32 )
-//#define ipconfigNIC_LINKSPEED100			( 1 )
-#define ipconfigNIC_LINKSPEED_AUTODETECT	( 1 )
+// /* Zynq driver specific parameters */
+// #define ipconfigNIC_INCLUDE_GEM				( 1 )
+// #define ipconfigNIC_N_TX_DESC				( 32 )
+// #define ipconfigNIC_N_RX_DESC				( 32 )
+// //#define ipconfigNIC_LINKSPEED100			( 1 )
+// #define ipconfigNIC_LINKSPEED_AUTODETECT	( 1 )
 
 /* Set to 1 or 0 to include/exclude FTP and HTTP functionality from the standard
 server task. */
