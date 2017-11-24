@@ -184,7 +184,7 @@ BaseType_t x;
 			// No character was received.
 			break;
 		}
-		if( cRxedChar == 10 )
+		if( cRxedChar == 13 )
 		{
 			if( iCurLength > 0 )
 			{

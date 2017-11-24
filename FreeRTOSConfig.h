@@ -331,4 +331,6 @@ If not defined, the local broadcast address will be used, e.g. 192.168.0.255
 #define configUSE_TASK_FPU_SUPPORT    2
 */
 
+#define configNUM_THREAD_LOCAL_STORAGE_POINTERS		3
+
 #endif /* FREERTOS_CONFIG_H */

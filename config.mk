@@ -23,7 +23,7 @@ USE_TICKLESS_IDLE = false
 USE_MICREL_KSZ8851 ?= false
 
 USE_IPERF=true
-USE_FREERTOS_FAT=false
+USE_FREERTOS_FAT=true
 USE_USB_CDC=true
 USE_TELNET=true
 USE_USART=true
@@ -194,7 +194,6 @@ endif
 ifeq ($(USE_FREERTOS_FAT),true)
 	INC_PATH += \
 		$(PLUS_FAT_PATH)/include/ \
-		$(PLUS_FAT_PATH)/portable/ATSAM4E/ \
 		$(PLUS_FAT_PATH)/portable/common/
 	C_SRCS += \
 		$(PLUS_FAT_PATH)/ff_crc.c \
@@ -210,14 +209,14 @@ ifeq ($(USE_FREERTOS_FAT),true)
 		$(PLUS_FAT_PATH)/ff_sys.c \
 		$(PLUS_FAT_PATH)/ff_time.c \
 		$(PLUS_FAT_PATH)/ff_locking.c \
-		$(PLUS_FAT_PATH)/portable/ATSAM4E/ff_sddisk.c \
-		CreateAndVerifyExampleFiles.c \
-		ff_stdio_tests_with_cwd.c \
 		$(PLUS_TCP_PATH)/protocols/FTP/FreeRTOS_FTP_commands.c \
 		$(PLUS_TCP_PATH)/protocols/FTP/FreeRTOS_FTP_server.c \
 		$(PLUS_TCP_PATH)/protocols/HTTP/FreeRTOS_HTTP_commands.c \
 		$(PLUS_TCP_PATH)/protocols/HTTP/FreeRTOS_HTTP_server.c \
-		$(PLUS_TCP_PATH)/protocols/Common/FreeRTOS_TCP_server.c
+		$(PLUS_TCP_PATH)/protocols/Common/FreeRTOS_TCP_server.c \
+		$(PLUS_FAT_PATH)/portable/common/ff_ramdisk.c \
+		$(UTILITIES_PATH)/date_and_time.c
+
 	DEFS += -D USE_FREERTOS_FAT=1
 endif
 
@@ -246,7 +245,8 @@ C_EXTRA_FLAGS= \
 	-fno-builtin-memset \
 	-fdata-sections \
 	-ffunction-sections \
-	-mfpu=neon
+	-mfpu=neon \
+	-mno-unaligned-access
 
 #	-fno-strict-aliasing
 

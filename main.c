@@ -108,6 +108,11 @@
 #include "FreeRTOS_DHCP.h"
 #include "FreeRTOS_tcp_server.h"
 #include "NetworkInterface.h"
+/* FreeRTOS+FAT includes. */
+#include "ff_headers.h"
+#include "ff_stdio.h"
+#include "ff_ramdisk.h"
+#include "ff_sddisk.h"
 
 /* Demo application includes. */
 #include "hr_gettime.h"
@@ -138,9 +143,26 @@
 #define mainCOMMAND_TASK_PRIORITY		( tskIDLE_PRIORITY + 1 )
 #define mainCOMMAND_TASK_STACK_SIZE		( 1024 )
 
+/* FTP and HTTP servers execute in the TCP server work task. */
+#define mainTCP_SERVER_TASK_PRIORITY	( tskIDLE_PRIORITY + 2 )
+#define	mainTCP_SERVER_STACK_SIZE		2048
+
+#define mainHAS_RAMDISK					1
+#define mainHAS_SDCARD					0
+
+/* Set the following constants to 1 to include the relevant server, or 0 to
+exclude the relevant server. */
+#define mainCREATE_FTP_SERVER			1
+#define mainCREATE_HTTP_SERVER 			1
+
+#define mainRAM_DISK_SECTOR_SIZE		512
+#define mainRAM_DISK_SECTORS			( ( 20 * 1024 * 1024 )  / mainRAM_DISK_SECTOR_SIZE )
+#define mainRAM_DISK_NAME				"/"
+#define mainIO_MANAGER_CACHE_SIZE		( 15UL * mainRAM_DISK_SECTOR_SIZE )
+
 /* Define names that will be used for DNS, LLMNR and NBNS searches. */
-#define mainHOST_NAME					"sam4e"
-#define mainDEVICE_NICK_NAME			"sam4expro"
+#define mainHOST_NAME					"cyclone"
+#define mainDEVICE_NICK_NAME			"cyclone"
 
 #ifndef ARRAY_SIZE
 	#define ARRAY_SIZE(x)	( BaseType_t )( sizeof( x ) / sizeof( x )[ 0 ] )
@@ -173,6 +195,8 @@ void vApplicationTickHook( void );
 
 static void prvCommandTask( void *pvParameters );
 static BaseType_t xTasksAlreadyCreated = pdFALSE;
+
+static void prvTCPServerTask( void *pvParameters );
 
 #warning Take away
 void david_test(void);
@@ -219,6 +243,9 @@ const _A4_ uint8_t ucMACAddress[ 6 ] = { configMAC_ADDR0, configMAC_ADDR1, confi
 /* Use by the pseudo random number generator. */
 static UBaseType_t ulNextRand;
 
+/* Handle of the task that runs the FTP and HTTP servers. */
+static TaskHandle_t xServerWorkTaskHandle = NULL;
+
 static SemaphoreHandle_t xServerSemaphore;
 
 /* Use the time it takes to configure EMAC and Ethernet PHY as a seed for
@@ -226,6 +253,15 @@ the randomiser. */
 uint64_t ullStartConfigTime;
 
 int verboseLevel;
+
+/* FreeRTOS+FAT disks for the SD card and RAM disk. */
+#if( mainHAS_SDCARD != 0 )
+	FF_Disk_t *pxSDDisk;
+#endif
+
+#if( mainHAS_RAMDISK != 0 )
+	FF_Disk_t *pxRAMDisk;
+#endif
 
 /* Handle of the task that runs the FTP and HTTP servers. */
 static TaskHandle_t xCommandTaskHandle = NULL;
@@ -274,6 +310,9 @@ int main( void )
 	FreeRTOS_IPInit( ucIPAddress, ucNetMask, ucGatewayAddress, ucDNSServerAddress, ucMACAddress );
 
 	xTaskCreate( prvCommandTask, "Command", mainCOMMAND_TASK_STACK_SIZE, NULL, mainCOMMAND_TASK_PRIORITY, &xCommandTaskHandle );
+	/* Custom task for HTTP and FTp servers. */
+	xTaskCreate( prvTCPServerTask, "TCPWork", mainTCP_SERVER_STACK_SIZE, NULL, mainTCP_SERVER_TASK_PRIORITY, &xServerWorkTaskHandle );
+
 	#if( USE_LOG_EVENT != 0 )
 	{
 		iEventLogInit();
@@ -304,6 +343,76 @@ extern BaseType_t xPlusTCPStarted;
 	{
 	}
 	extern void emac_show_buffers( void );
+
+	static void prvTCPServerTask( void *pvParameters )
+	{
+	const TickType_t xBlockTime = pdMS_TO_TICKS( 200UL );
+	TCPServer_t *pxTCPServer = NULL;
+	/* A structure that defines the servers to be created.  Which servers are
+	included in the structure depends on the mainCREATE_HTTP_SERVER and
+	mainCREATE_FTP_SERVER settings at the top of this file. */
+	static const struct xSERVER_CONFIG xServerConfiguration[] =
+	{
+		#if( mainCREATE_HTTP_SERVER == 1 )
+				/* Server type,		port number,	backlog, 	root dir. */
+				{ eSERVER_HTTP, 	80, 			12, 		configHTTP_ROOT },
+		#endif
+
+		#if( mainCREATE_FTP_SERVER == 1 )
+				/* Server type,		port number,	backlog, 	root dir. */
+				{ eSERVER_FTP,  	21, 			12, 		"" }
+		#endif
+	};
+#if( mainHAS_RAMDISK != 0 )
+	static uint8_t ucRAMDisk[ mainRAM_DISK_SECTORS * mainRAM_DISK_SECTOR_SIZE ]
+		__attribute__ ( ( aligned( 32 ) ) );
+#endif
+
+		ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+		#if( mainHAS_RAMDISK != 0 )
+		{
+			FreeRTOS_printf( ( "Create RAM-disk\n" ) );
+			/* Create the RAM disk. */
+			pxRAMDisk = FF_RAMDiskInit( mainRAM_DISK_NAME, ucRAMDisk, mainRAM_DISK_SECTORS, mainIO_MANAGER_CACHE_SIZE );
+			configASSERT( pxRAMDisk );
+
+			/* Print out information on the RAM disk. */
+			FF_RAMDiskShowPartition( pxRAMDisk );
+		}
+		#endif	/* mainHAS_RAMDISK */
+		#if( mainHAS_SDCARD != 0 )
+		{
+			FreeRTOS_printf( ( "Mount SD-card\n" ) );
+			/* Create the SD card disk. */
+			pxSDDisk = FF_SDDiskInit( mainSD_CARD_DISK_NAME );
+			if( pxSDDisk != NULL )
+			{
+				FF_IOManager_t *pxIOManager = sddisk_ioman( pxSDDisk );
+				uint64_t ullFreeBytes =
+					( uint64_t ) pxIOManager->xPartition.ulFreeClusterCount * pxIOManager->xPartition.ulSectorsPerCluster * 512ull;
+				FreeRTOS_printf( ( "Volume %-12.12s\n",
+					pxIOManager->xPartition.pcVolumeLabel ) );
+				FreeRTOS_printf( ( "Free clusters %lu total clusters %lu Free %lu KB\n",
+					pxIOManager->xPartition.ulFreeClusterCount,
+					pxIOManager->xPartition.ulNumClusters,
+					( uint32_t ) ( ullFreeBytes / 1024ull ) ) );
+			}
+			FreeRTOS_printf( ( "Mount SD-card done\n" ) );
+		}
+		#endif	/* mainHAS_SDCARD */
+
+		/* Create the servers defined by the xServerConfiguration array above. */
+		pxTCPServer = FreeRTOS_CreateTCPServer( xServerConfiguration, sizeof( xServerConfiguration ) / sizeof( xServerConfiguration[ 0 ] ) );
+		configASSERT( pxTCPServer );
+
+		for( ;; )
+		{
+			if( pxTCPServer )
+			{
+				FreeRTOS_TCPServerWork( pxTCPServer, xBlockTime );
+			}
+		}
+	}
 
 	static void prvCommandTask( void *pvParameters )
 	{
