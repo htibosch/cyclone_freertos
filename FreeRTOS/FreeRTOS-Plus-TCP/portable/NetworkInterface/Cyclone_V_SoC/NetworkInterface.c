@@ -154,7 +154,7 @@ extern int phy_detected;
 static uint32_t ulPHYLinkStatus = 0;
 
 #if( ipconfigUSE_LLMNR == 1 )
-	//static const uint8_t xLLMNR_MACAddress[] = { 0x01, 0x00, 0x5E, 0x00, 0x00, 0xFC };
+	static const uint8_t xLLMNR_MACAddress[] = { 0x01, 0x00, 0x5E, 0x00, 0x00, 0xFC };
 #endif
 
 /* ucMACAddress as it appears in main.c */
@@ -297,6 +297,12 @@ BaseType_t xLinkStatus;
 
 		/* Write the main MAC address at position 0 */
 		gmac_set_MAC_address( iMacID, ucMACAddress, 0 );
+		#if( ipconfigUSE_LLMNR == 1 )
+		{
+			/* Write the LLMNR MAC address at position 1 */
+			gmac_set_MAC_address( iMacID, xLLMNR_MACAddress, 1 );
+		}
+		#endif
 
 		gmac_dma_stop_tx( iMacID, 0 );
 		gmac_dma_stop_rx( iMacID, 0 );
