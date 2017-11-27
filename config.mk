@@ -28,6 +28,12 @@ USE_USB_CDC=true
 USE_TELNET=true
 USE_USART=true
 USE_LOG_EVENT=false
+ipconfigMULTI_INTERFACE=true
+
+C_SRCS=
+CPP_SRCS=
+S_SRCS=
+DEFS=
 
 # Base paths
 # PRJ_PATH points to e:\home
@@ -45,14 +51,17 @@ FREERTOS_PATH = $(FREERTOS_ROOT_PATH)/FreeRTOS_v9.0.0
 RTOS_MEM_PATH = $(FREERTOS_PATH)/portable/MemMang
 PLUS_FAT_PATH = $(FREERTOS_ROOT_PATH)/FreeRTOS-Plus-FAT
 UTILITIES_PATH = $(FREERTOS_ROOT_PATH)/utilities
-PLUS_TCP_PATH = $(FREERTOS_ROOT_PATH)/FreeRTOS-Plus-TCP
 
 HW_LIB=$(CUR_PATH)/Altera_Code/HardwareLibrary
 SOC_SUPPORT=$(CUR_PATH)/Altera_Code/SoCSupport
 
-C_SRCS=
-CPP_SRCS=
-S_SRCS=
+ifeq ($(ipconfigMULTI_INTERFACE),true)
+	DEFS += -DipconfigMULTI_INTERFACE=1
+	PLUS_TCP_PATH = $(FREERTOS_ROOT_PATH)/FreeRTOS-Plus-TCP-multi
+else
+	DEFS += -DipconfigMULTI_INTERFACE=0
+	PLUS_TCP_PATH = $(FREERTOS_ROOT_PATH)/FreeRTOS-Plus-TCP
+endif
 
 DEFS += -DBOARD=$(MY_BOARD) -DFREERTOS_USED
 
@@ -145,6 +154,11 @@ C_SRCS += \
 	$(PLUS_TCP_PATH)/portable/NetworkInterface/Cyclone_V_SoC/cyclone_phy.c \
 	$(PLUS_TCP_PATH)/portable/BufferManagement/BufferAllocation_1.c
 
+ifeq ($(ipconfigMULTI_INTERFACE),true)
+	C_SRCS += \
+		$(PLUS_TCP_PATH)/FreeRTOS_Routing.c
+endif
+
 ifeq ($(USE_USART),true)
 	DEFS += -DUSE_USART=1
 	C_SRCS += \
@@ -227,7 +241,7 @@ LINKER_SCRIPT=$(CUR_PATH)/cycloneV-dk-ram.ld
 TARGET = RTOSDemo.elf
 
 # Later, use -Os
-OPTIMIZATION = -Os
+OPTIMIZATION = -O0
 # OPTIMIZATION = -O0
 
 #HT Do not use it for now

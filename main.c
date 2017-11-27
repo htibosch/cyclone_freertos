@@ -108,6 +108,10 @@
 #include "FreeRTOS_DHCP.h"
 #include "FreeRTOS_tcp_server.h"
 #include "NetworkInterface.h"
+#if( ipconfigMULTI_INTERFACE != 0 )
+	#include "FreeRTOS_Routing.h"
+#endif
+
 /* FreeRTOS+FAT includes. */
 #include "ff_headers.h"
 #include "ff_stdio.h"
@@ -156,7 +160,7 @@ exclude the relevant server. */
 #define mainCREATE_HTTP_SERVER 			1
 
 #define mainRAM_DISK_SECTOR_SIZE		512
-#define mainRAM_DISK_SECTORS			( ( 20 * 1024 * 1024 )  / mainRAM_DISK_SECTOR_SIZE )
+#define mainRAM_DISK_SECTORS			( ( 200 * 1024 * 1024 )  / mainRAM_DISK_SECTOR_SIZE )
 #define mainRAM_DISK_NAME				"/"
 #define mainIO_MANAGER_CACHE_SIZE		( 15UL * mainRAM_DISK_SECTOR_SIZE )
 
@@ -284,10 +288,18 @@ void vShowTaskTable( BaseType_t aDoClear );
 
 void memcpy_test(void);
 
+#if( ipconfigMULTI_INTERFACE != 0 )
+	NetworkInterface_t *pxCyclone_FillInterfaceDescriptor( BaseType_t xEMACIndex, NetworkInterface_t *pxInterface );
+#endif /* ipconfigMULTI_INTERFACE */
+
 /*-----------------------------------------------------------*/
 
 int main( void )
 {
+#if( ipconfigMULTI_INTERFACE != 0 )
+	static NetworkInterface_t xInterfaces[ 1 ];
+	static NetworkEndPoint_t xEndPoints[ 1 ];
+#endif /* ipconfigMULTI_INTERFACE */
 	/* Configure the hardware ready to run the demo. */
 	prvSetupHardware();
 
@@ -307,7 +319,20 @@ int main( void )
 //#warning Re-enable
 
 	ullStartConfigTime = ullGetHighResolutionTime();
+#if( ipconfigMULTI_INTERFACE != 0 )
+	/* As EMAC1 is used, give index 1 as a parameter. */
+	pxCyclone_FillInterfaceDescriptor( 1, &( xInterfaces[ 0 ] ) );
+	FreeRTOS_FillEndPoint( &( xEndPoints[ 0 ] ), ucIPAddress, ucNetMask, ucGatewayAddress, ucDNSServerAddress, ucMACAddress );
+	FreeRTOS_AddEndPoint( &( xInterfaces[ 0 ] ), &( xEndPoints[ 0 ] ) );
+
+	/* You can modify fields: */
+	xEndPoints[ 0 ].bits.bIsDefault = pdTRUE_UNSIGNED;
+	xEndPoints[ 0 ].bits.bWantDHCP = pdFALSE_UNSIGNED;
+
+	FreeRTOS_IPStart();
+#else
 	FreeRTOS_IPInit( ucIPAddress, ucNetMask, ucGatewayAddress, ucDNSServerAddress, ucMACAddress );
+#endif
 
 	xTaskCreate( prvCommandTask, "Command", mainCOMMAND_TASK_STACK_SIZE, NULL, mainCOMMAND_TASK_PRIORITY, &xCommandTaskHandle );
 	/* Custom task for HTTP and FTp servers. */
@@ -364,11 +389,14 @@ extern BaseType_t xPlusTCPStarted;
 		#endif
 	};
 #if( mainHAS_RAMDISK != 0 )
+	/* Declare the disk space as a static character array. */
 	static uint8_t ucRAMDisk[ mainRAM_DISK_SECTORS * mainRAM_DISK_SECTOR_SIZE ]
 		__attribute__ ( ( aligned( 32 ) ) );
 #endif
 
+		/* Wait for the network to come up. */
 		ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+
 		#if( mainHAS_RAMDISK != 0 )
 		{
 			FreeRTOS_printf( ( "Create RAM-disk\n" ) );
@@ -411,6 +439,12 @@ extern BaseType_t xPlusTCPStarted;
 			{
 				FreeRTOS_TCPServerWork( pxTCPServer, xBlockTime );
 			}
+			else
+			{
+				/* Creation of handler failed, configASSERT() is not
+				defined, let it sleep for a minute. */
+				vTaskDelay( pdMS_TO_TICKS( 60000ul ) );
+			}
 		}
 	}
 
@@ -434,7 +468,7 @@ extern BaseType_t xPlusTCPStarted;
 
 		/* Wait until the network is up before creating the servers.  The
 		notification is given from the network event hook. */
-//#warning Enable this ulTaskNotifyTake again
+
 		ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
 
 		/* The priority of this task can be raised now the disk has been
@@ -913,7 +947,11 @@ events are only received if implemented in the MAC driver. */
 /* Called by FreeRTOS+TCP when the network connects or disconnects.  Disconnect
 events are only received if implemented in the MAC driver. */
 extern void vNetworkSocketsInit( void );
-void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
+#if( ipconfigMULTI_INTERFACE != 0 )
+	void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent, NetworkEndPoint_t *pxEndPoint )
+#else
+	void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
+#endif
 {
 
 	/* If the network has just come up...*/
@@ -969,7 +1007,13 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
 		char cBuffer[ 16 ];
 			/* Print out the network configuration, which may have come from a DHCP
 			server. */
-			FreeRTOS_GetAddressConfiguration( &ulIPAddress, &ulNetMask, &ulGatewayAddress, &ulDNSServerAddress );
+			#if( ipconfigMULTI_INTERFACE != 0 )
+				FreeRTOS_GetAddressConfiguration( pxEndPoint, &ulIPAddress, &ulNetMask, &ulGatewayAddress, &ulDNSServerAddress );
+			#else
+				FreeRTOS_GetAddressConfiguration( &ulIPAddress, &ulNetMask, &ulGatewayAddress, &ulDNSServerAddress );
+			#endif
+				
+
 			FreeRTOS_inet_ntoa( ulIPAddress, cBuffer );
 			FreeRTOS_printf( ( "IP Address: %s\n", cBuffer ) );
 
@@ -1073,7 +1117,11 @@ const char *pcApplicationHostnameHook( void )
 }
 /*-----------------------------------------------------------*/
 
-BaseType_t xApplicationDNSQueryHook( const char *pcName )
+#if( ipconfigMULTI_INTERFACE != 0 )
+	BaseType_t xApplicationDNSQueryHook( NetworkEndPoint_t *pxEndPoint, const char *pcName )
+#else
+	BaseType_t xApplicationDNSQueryHook( const char *pcName )
+#endif
 {
 BaseType_t xReturn;
 
@@ -1718,3 +1766,4 @@ uint64_t copy_size = LOOP_COUNT * MEMCPY_BLOCK_SIZE;
 	}
 	vPortFree( ( void * ) pxBlock );
 }
+

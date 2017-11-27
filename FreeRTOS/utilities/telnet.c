@@ -164,7 +164,7 @@ BaseType_t xResult = 0;
 
 BaseType_t xTelnetCreate( Telnet_t * pxTelnet, BaseType_t xPortNr )
 {
-BaseType_t xReceiveTimeOut = 10;
+BaseType_t xReceiveTimeOut = 0;
 struct freertos_sockaddr xBindAddress;
 BaseType_t xResult = 0;
 
