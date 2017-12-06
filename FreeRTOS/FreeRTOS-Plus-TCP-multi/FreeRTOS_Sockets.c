@@ -1180,8 +1180,6 @@ List_t *pxSocketList;
 } /* Tested */
 /*-----------------------------------------------------------*/
 
-BaseType_t xApplicationMemoryPermissions( uint32_t aAddress );
-
 /*
  * Close a socket and free the allocated space
  * In case of a TCP socket: the connection will not be closed automatically
@@ -1204,11 +1202,6 @@ xCloseEvent.pvData = ( void * ) xSocket;
 	}
 	else
 	{
-		if( ( xApplicationMemoryPermissions( ( uint32_t ) xSocket ) & 0x03 ) != 0x03 )
-		{
-			FreeRTOS_printf( ( "FreeRTOS_closesocket: invalid ptr %p\n", xSocket ) );
-			return -1;
-		}
 		#if( ( ipconfigUSE_TCP == 1 ) && ( ipconfigUSE_CALLBACKS == 1 ) )
 		{
 			if( pxSocket->ucProtocol == ( uint8_t ) FREERTOS_IPPROTO_TCP )
@@ -1248,12 +1241,6 @@ void *vSocketClose( FreeRTOS_Socket_t *pxSocket )
 {
 NetworkBufferDescriptor_t *pxNetworkBuffer;
 
-	/*_HT_ introduced this memory-check temporarily for debugging. */
-	if( ( xApplicationMemoryPermissions( ( uint32_t ) pxSocket ) & 0x03 ) != 0x03 )
-	{
-		FreeRTOS_printf( ( "vSocketClose: invalid ptr %p\n", pxSocket ) );
-		return 0;
-	}
 	#if( ipconfigUSE_TCP == 1 )
 	{
 		/* For TCP: clean up a little more. */

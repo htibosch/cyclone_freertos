@@ -1988,7 +1988,7 @@ uint8_t ucProtocol;
 			else
 #endif /* ipconfigUSE_IPv6 */
 			{
-				vARPRefreshCacheEntry( &( pxIPPacket->xEthernetHeader.xSourceAddress ), pxIPHeader->ulSourceIPAddress );
+				vARPRefreshCacheEntry( &( pxIPPacket->xEthernetHeader.xSourceAddress ), pxIPHeader->ulSourceIPAddress, pxNetworkBuffer->pxInterface );
 			}
 		}
 

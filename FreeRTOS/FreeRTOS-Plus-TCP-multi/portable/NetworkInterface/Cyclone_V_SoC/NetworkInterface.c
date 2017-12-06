@@ -178,15 +178,15 @@ static uint32_t ulPHYLinkStatus = 0;
 	static const uint8_t xLLMNR_MACAddress[] = { 0x01, 0x00, 0x5E, 0x00, 0x00, 0xFC };
 #endif
 
-/* ucMACAddress as it appears in main.c */
-extern const uint8_t ucMACAddress[ 6 ];
+///* ucMACAddress as it appears in main.c */
+//extern const uint8_t ucMACAddress[ 6 ];
 
 /* Holds the handle of the task used as a deferred interrupt processor.  The
 handle is used so direct notifications can be sent to the task for all EMAC/DMA
 related interrupts. */
 static TaskHandle_t xEMACTaskHandles[ CYCLONE_EMAC_COUNT ];
 
-static volatile uint32_t ulISREvents;
+static volatile uint32_t ulISREvents[ CYCLONE_EMAC_COUNT ];
 
 EMACInterface_t xEMACif;
 
@@ -220,7 +220,7 @@ static NetworkInterface_t *pxMyInterfaces[ CYCLONE_EMAC_COUNT ];
 /*
  * Check if a given packet should be accepted.
  */
-static BaseType_t xMayAcceptPacket( uint8_t *pcBuffer );
+static BaseType_t xMayAcceptPacket( uint8_t *pcBuffer, NetworkEndPoint_t **ppxEndPoint );
 
 /*!
  * The callback to use when an interrupt needs to be serviced.
@@ -291,7 +291,8 @@ BaseType_t xCycloneNetworkInterfaceInitialise( NetworkInterface_t *pxInterface )
 const TickType_t xWaitLinkDelay = pdMS_TO_TICKS( 7000UL ), xWaitRelinkDelay = pdMS_TO_TICKS( 1000UL );
 BaseType_t xLinkStatus;
 BaseType_t xEMACIndex = ( BaseType_t )pxInterface->pvArgument;
-
+int iMACAddressIndex = 0;
+NetworkEndPoint_t *pxEndPoint;
 
 	pxMyInterfaces[ xEMACIndex ] = pxInterface;
 
@@ -324,11 +325,17 @@ BaseType_t xEMACIndex = ( BaseType_t )pxInterface->pvArgument;
 		cyclone_phy_init( iMacID, -1 );
 
 		/* Write the main MAC address at position 0 */
-		gmac_set_MAC_address( iMacID, ucMACAddress, 0 );
+		for( pxEndPoint = FreeRTOS_FirstEndPoint( pxInterface );
+			 pxEndPoint != NULL;
+			 pxEndPoint = FreeRTOS_NextEndPoint( pxInterface, pxEndPoint ) )
+		{
+			gmac_set_MAC_address( iMacID, pxEndPoint->xMACAddress.ucBytes, iMACAddressIndex );
+			iMACAddressIndex++;
+		}
 		#if( ipconfigUSE_LLMNR == 1 )
 		{
 			/* Write the LLMNR MAC address at position 1 */
-			gmac_set_MAC_address( iMacID, xLLMNR_MACAddress, 1 );
+			gmac_set_MAC_address( iMacID, xLLMNR_MACAddress, iMACAddressIndex );
 		}
 		#endif
 
@@ -509,7 +516,7 @@ ulLastDMAStatus = ulDMAStatus;
 			reg.ts_xmit_state,			/* 20 */
 			reg.eb_bus_error);			/* 23 */
 
-		ulISREvents |= EMAC_IF_RX_EVENT;
+		ulISREvents[ iInterruptMacID ] |= EMAC_IF_RX_EVENT;
 	}
 	if( ( ulDMAStatus & TX_MASK ) != 0 )
 	{
@@ -521,10 +528,10 @@ ulLastDMAStatus = ulDMAStatus;
 			reg.rs_recv_state,			/* 17 */
 			reg.ts_xmit_state,			/* 20 */
 			reg.eb_bus_error);			/* 23 */
-		ulISREvents |= EMAC_IF_TX_EVENT;
+		ulISREvents[ iInterruptMacID ] |= EMAC_IF_TX_EVENT;
 	}
 
-	if( ( ulISREvents != 0 ) && ( xEMACTaskHandles[ iInterruptMacID ] != NULL ) )
+	if( ( ulISREvents[ iInterruptMacID ] != 0 ) && ( xEMACTaskHandles[ iInterruptMacID ] != NULL ) )
 	{
 		vTaskNotifyGiveFromISR( xEMACTaskHandles[ iInterruptMacID ], &xHigherPriorityTaskWoken );
 	}
@@ -541,25 +548,6 @@ ulLastDMAStatus = ulDMAStatus;
 			}
 		}
 	}
-//	if( ulDMAStatus & ( TX_MASK | RX_MASK | DMA_STATUS_NIS ) )
-//	{
-//	uint32_t ulStatus;
-//
-//		ulStatus = gmac_clear_dma_interrupt_status( iInterruptMacID, ulDMAStatus & ( TX_MASK | RX_MASK ) ) & ISR_MASK;
-//		if( ( ulStatus & DMA_STATUS_NIS ) != 0ul )
-//		{
-//			ulCheckStatus = gmac_clear_dma_interrupt_status( iInterruptMacID, DMA_STATUS_NIS ) & ISR_MASK;
-//			eventLogAdd( "NIE: %04lX -> %04lX", ulStatus, ulCheckStatus );
-//		}
-//	}
-//	if( ulLastDMAStatus != ulDMAStatus )
-//	{
-//		if( ulISREvents == 0ul )
-//		{
-//			eventLogAdd("TX_RX == %02lX", ulDMAStatus & ISR_MASK );
-//		}
-//		ulLastDMAStatus = ulDMAStatus;
-//	}
 
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 }
@@ -602,7 +590,7 @@ BaseType_t xEMACIndex = ( BaseType_t ) pxInterface->pvArgument;
 		{
 			if( uxQueueMessagesWaiting( xTXDescriptorSemaphore ) == 0 )
 			{
-				ulISREvents |= EMAC_IF_TX_EVENT;
+				ulISREvents[ xEMACIndex ] |= EMAC_IF_TX_EVENT;
 				xTaskNotifyGive( xEMACTaskHandles[ xEMACIndex ] );
 			}
 			if( xSemaphoreTake( xTXDescriptorSemaphore, xBlockTimeTicks ) != pdPASS )
@@ -782,10 +770,11 @@ BaseType_t xReturn;
 }
 /*-----------------------------------------------------------*/
 
-static BaseType_t xMayAcceptPacket( uint8_t *pcBuffer )
+static BaseType_t xMayAcceptPacket( uint8_t *pcBuffer, NetworkEndPoint_t **ppxEndPoint )
 {
 const ProtocolPacket_t *pxProtPacket = ( const ProtocolPacket_t * )pcBuffer;
 
+	*ppxEndPoint = NULL;
 	switch( pxProtPacket->xTCPPacket.xEthernetHeader.usFrameType )
 	{
 	case ipARP_FRAME_TYPE:
@@ -803,6 +792,8 @@ const ProtocolPacket_t *pxProtPacket = ( const ProtocolPacket_t * )pcBuffer;
 	{
 		const IPHeader_t *pxIPHeader = &(pxProtPacket->xTCPPacket.xIPHeader);
 		uint32_t ulDestinationIPAddress;
+		NetworkEndPoint_t *pxEndPoint;
+		BaseType_t xEndPointFound;
 
 		/* Ensure that the incoming packet is not fragmented (only outgoing packets
 		 * can be fragmented) as these are the only handled IP frames currently. */
@@ -821,10 +812,30 @@ const ProtocolPacket_t *pxProtPacket = ( const ProtocolPacket_t * )pcBuffer;
 		}
 
 		ulDestinationIPAddress = pxIPHeader->ulDestinationIPAddress;
+
+		/* Is it a broadcast address x.x.x.255 ? */
+		if( ( FreeRTOS_ntohl( ulDestinationIPAddress ) & 0xff ) == 0xff )
+		{
+			xEndPointFound = pdTRUE;
+		}
+		else
+		{
+			xEndPointFound = pdFALSE;
+			for( pxEndPoint = FreeRTOS_FirstEndPoint( NULL );
+				pxEndPoint != NULL;
+				pxEndPoint = FreeRTOS_NextEndPoint( NULL, pxEndPoint ) )
+			{
+				if( ulDestinationIPAddress == pxEndPoint->ulIPAddress )
+				{
+					xEndPointFound = pdTRUE;
+					*ppxEndPoint = pxEndPoint;
+					break;
+				}
+			}
+		}
+
 		/* Is the packet for this node? */
-		if( ( ulDestinationIPAddress != *ipLOCAL_IP_ADDRESS_POINTER ) &&
-			/* Is it a broadcast address x.x.x.255 ? */
-			( ( FreeRTOS_ntohl( ulDestinationIPAddress ) & 0xff ) != 0xff ) &&
+		if( ( xEndPointFound == pdFALSE ) &&
 		#if( ipconfigUSE_LLMNR == 1 )
 			( ulDestinationIPAddress != ipLLMNR_IP_ADDR ) &&
 		#endif
@@ -988,6 +999,7 @@ NetworkBufferDescriptor_t *pxNewNetworkBuffer = NULL;
 
 	if( xReceivedLength > 0 )
 	{
+	NetworkEndPoint_t *pxEndPoint = NULL;
 		pucBuffer = ( uint8_t * )frameInfo.buffer;
 		#if( NETWORK_BUFFERS_CACHED	!= 0 )
 		{
@@ -1026,7 +1038,7 @@ eventLogAdd("RX Recv  %d (%lu)", (int)(pxRxDescriptor - rxDescriptors), xReceive
 		else
 		{
 			/* See if this packet must be handled. */
-			xAccepted = xMayAcceptPacket( pucBuffer );
+			xAccepted = xMayAcceptPacket( pucBuffer, &( pxEndPoint ) );
 		}
 
 		if( xAccepted != pdFALSE )
@@ -1048,7 +1060,14 @@ eventLogAdd("RX Recv  %d (%lu)", (int)(pxRxDescriptor - rxDescriptors), xReceive
 			pxCurNetworkBuffer = pxPacketBuffer_to_NetworkBuffer( pucBuffer );
 			configASSERT( pxCurNetworkBuffer != NULL );
 			pxCurNetworkBuffer->pxInterface = pxInterface;
-			pxCurNetworkBuffer->pxEndPoint = pxInterface->pxEndPoint;
+			if( pxEndPoint != NULL )
+			{
+				pxCurNetworkBuffer->pxEndPoint = pxEndPoint;
+			}
+			else
+			{
+				pxCurNetworkBuffer->pxEndPoint = pxInterface->pxEndPoint;
+			}
 		}
 		#else
 		{
@@ -1184,7 +1203,7 @@ const TickType_t ulMaxBlockTime = pdMS_TO_TICKS( 500UL );
 TimeOut_t xPhyTime;
 TickType_t xPhyRemTime;
 BaseType_t xEMACIndex = ( BaseType_t )pvParameters;
-
+volatile uint32_t *pulISREvents = ulISREvents + xEMACIndex;
 
 	vTask_init( &xEmacTask, 15 );
 
@@ -1237,7 +1256,7 @@ BaseType_t xEMACIndex = ( BaseType_t )pvParameters;
 		}
 		#endif /* ipconfigCHECK_IP_QUEUE_SPACE */
 
-		if( ( ulISREvents & EMAC_IF_ALL_EVENT ) == 0 )
+		if( ( *( pulISREvents ) & EMAC_IF_ALL_EVENT ) == 0 )
 		{
 		vTask_finish( &xEmacTask );
 			/* No events to process now, wait for the next. */
@@ -1245,9 +1264,9 @@ BaseType_t xEMACIndex = ( BaseType_t )pvParameters;
 		vTask_start( &xEmacTask );
 		}
 
-		if( ( ulISREvents & EMAC_IF_RX_EVENT ) != 0 )
+		if( ( *( pulISREvents ) & EMAC_IF_RX_EVENT ) != 0 )
 		{
-			ulISREvents &= ~EMAC_IF_RX_EVENT;
+			*( pulISREvents ) &= ~EMAC_IF_RX_EVENT;
 			while ( gmac_check_rx( pxMyInterfaces[ xEMACIndex ] ) > 0 ) { uxResult++; }
 			#if( ipconfigUSE_LINKED_RX_MESSAGES != 0 )
 			{
@@ -1259,17 +1278,17 @@ BaseType_t xEMACIndex = ( BaseType_t )pvParameters;
 			#endif
 		}
 
-		if( ( ulISREvents & EMAC_IF_TX_EVENT ) != 0 )
+		if( ( *( pulISREvents ) & EMAC_IF_TX_EVENT ) != 0 )
 		{
 			/* Code to release TX buffers if zero-copy is used. */
-			ulISREvents &= ~EMAC_IF_TX_EVENT;
+			*( pulISREvents ) &= ~EMAC_IF_TX_EVENT;
 			/* Check if DMA packets have been delivered. */
 			vClearTXBuffers();
 		}
 
-		if( ( ulISREvents & EMAC_IF_ERR_EVENT ) != 0 )
+		if( ( *( pulISREvents ) & EMAC_IF_ERR_EVENT ) != 0 )
 		{
-			ulISREvents &= ~EMAC_IF_ERR_EVENT;
+			*( pulISREvents ) &= ~EMAC_IF_ERR_EVENT;
 			gmac_check_errors( &xEMACif );
 		}
 

@@ -1149,9 +1149,22 @@ ProtocolHeaders_t *pxProtocolHeaders;
 	else
 	#endif
 	{
+	NetworkInterface_t *pxInterface;
+
 		ulRemoteIP = FreeRTOS_htonl( pxSocket->u.xTCP.ulRemoteIP );
 		/* Determine the ARP cache status for the requested IP address. */
-		eReturned = eARPGetCacheEntry( &( ulRemoteIP ), &( xEthAddress ) );
+		eReturned = eARPGetCacheEntry( &( ulRemoteIP ), &( xEthAddress ), &( pxInterface ) );
+		if( eReturned == eARPCacheHit )
+		{
+			pxSocket->pxEndPoint = FreeRTOS_InterfaceEndPointOnNetMask( pxInterface, FreeRTOS_htonl( pxSocket->u.xTCP.ulRemoteIP ), 21 );
+			if( pxSocket->pxEndPoint != NULL )
+			{
+				pxSocket->ulLocalAddress = FreeRTOS_ntohl( pxSocket->pxEndPoint->ulIPAddress );
+			}
+			FreeRTOS_printf( ( "prvTCPPrepareConnect: remote IP = %lxip end-point = %lxip\n",
+				pxSocket->u.xTCP.ulRemoteIP,
+				pxSocket->ulLocalAddress ) );
+		}
 	}
 
 	switch( eReturned )
@@ -2775,7 +2788,7 @@ int32_t lDistance, lSendResult;
 }
 /*-----------------------------------------------------------*/
 
-int tcp_min_rx_buflen = 3;
+int tcp_min_rx_buflen = 2;
 
 /*
  * Called from prvTCPHandleState().  There is data to be sent.  If
@@ -3395,7 +3408,15 @@ FreeRTOS_Socket_t *pxReturn;
 			}
 			else if( prvTCPSocketCopy( pxNewSocket, pxSocket ) != pdFALSE )
 			{
-				pxNewSocket->pxEndPoint = pxNetworkBuffer->pxEndPoint;
+				if( pxNetworkBuffer->pxEndPoint != NUL )
+				{
+					pxNewSocket->pxEndPoint = pxNetworkBuffer->pxEndPoint;
+					pxNewSocket->ulLocalAddress = FreeRTOS_ntohl( pxNetworkBuffer->pxEndPoint->ulIPAddress );
+				}
+				FreeRTOS_printf( ( "Client socket bound to %lxip:%u\n",
+					pxNewSocket->ulLocalAddress,
+					pxNewSocket->usLocalPort ) );
+
 				/* The socket will be connected immediately, no time for the
 				owner to setsockopt's, therefore copy properties of the server
 				socket to the new socket.  Only the binding might fail (due to
@@ -3505,8 +3526,9 @@ struct freertos_sockaddr xAddress;
 	}
 	#endif /* ipconfigSUPPORT_SELECT_FUNCTION */
 
-	/* And bind it to the same local port as its parent. */
-	xAddress.sin_addr = *ipLOCAL_IP_ADDRESS_POINTER;
+	/* And bind it to the same local port as its parent.
+	NB. ulLocalAddress will get set after this function returns. */
+	xAddress.sin_addr = FreeRTOS_htonl( pxSocket->ulLocalAddress );
 	xAddress.sin_port = FreeRTOS_htons( pxSocket->usLocalPort );
 
 	#if( ipconfigTCP_HANG_PROTECTION == 1 )

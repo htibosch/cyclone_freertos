@@ -111,6 +111,7 @@ UDPPacket_t *pxUDPPacket;
 IPHeader_t *pxIPHeader;
 eARPLookupResult_t eReturned;
 uint32_t ulIPAddress = pxNetworkBuffer->ulIPAddress;
+NetworkInterface_t *pxInterface;
 
 	/* Map the UDP packet onto the start of the frame. */
 	pxUDPPacket = ( UDPPacket_t * ) pxNetworkBuffer->pucEthernetBuffer;
@@ -119,8 +120,10 @@ uint32_t ulIPAddress = pxNetworkBuffer->ulIPAddress;
 	pxIPHeader = &( pxUDPPacket->xIPHeader );
 
 	/* Determine the ARP cache status for the requested IP address.  This may
-	change the ulIPAddress to the router address. */
-	eReturned = eARPGetCacheEntry( &( ulIPAddress ), &( pxUDPPacket->xEthernetHeader.xDestinationAddress ) );
+	change the ulIPAddress to the router address.
+	Beside the MAC-address, a reference to the network Interface will
+    be return. */
+	eReturned = eARPGetCacheEntry( &( ulIPAddress ), &( pxUDPPacket->xEthernetHeader.xDestinationAddress ), &( pxInterface ) );
 
 	if( eReturned != eCantSendPacket )
 	{
@@ -189,6 +192,20 @@ uint32_t ulIPAddress = pxNetworkBuffer->ulIPAddress;
 			pxIPHeader->usLength = FreeRTOS_htons( pxIPHeader->usLength );
 			pxIPHeader->ulDestinationIPAddress = pxNetworkBuffer->ulIPAddress;
 
+			if( pxInterface )
+			{
+				if( pxNetworkBuffer->pxEndPoint != NULL )
+				{
+					FreeRTOS_printf( ( "vProcessGeneratedUDPPacket: End-point already known\n" ) );
+				}
+				else
+				{
+					pxNetworkBuffer->pxEndPoint = FreeRTOS_InterfaceEndPointOnNetMask( pxInterface, pxNetworkBuffer->ulIPAddress, 20 );
+					FreeRTOS_printf( ( "vProcessGeneratedUDPPacket: remote IP = %lxip end-point = %lxip\n",
+						FreeRTOS_htonl( pxNetworkBuffer->ulIPAddress ),
+						FreeRTOS_htonl( pxNetworkBuffer->pxEndPoint != 0 ? pxNetworkBuffer->pxEndPoint->ulIPAddress : 0x0ul ) ) );
+				}
+			}
 			/* Which end point should the ping go out on? */
 			if( pxNetworkBuffer->pxEndPoint == NULL )
 			{
@@ -248,7 +265,7 @@ uint32_t ulIPAddress = pxNetworkBuffer->ulIPAddress;
 			/* Add an entry to the ARP table with a null hardware address.
 			This allows the ARP timer to know that an ARP reply is
 			outstanding, and perform retransmissions if necessary. */
-			vARPRefreshCacheEntry( NULL, ulIPAddress );
+			vARPRefreshCacheEntry( NULL, ulIPAddress, NULL );
 
 			/* Generate an ARP for the required IP address. */
 			iptracePACKET_DROPPED_TO_GENERATE_ARP( pxNetworkBuffer->ulIPAddress );
@@ -326,7 +343,7 @@ UDPPacket_t *pxUDPPacket = (UDPPacket_t *) pxNetworkBuffer->pucEthernetBuffer;
 		/* When refreshing the ARP cache with received UDP packets we must be
 		careful;  hundreds of broadcast messages may pass and if we're not
 		handling them, no use to fill the ARP cache with those IP addresses. */
-		vARPRefreshCacheEntry( &( pxUDPPacket->xEthernetHeader.xSourceAddress ), pxUDPPacket->xIPHeader.ulSourceIPAddress );
+		vARPRefreshCacheEntry( &( pxUDPPacket->xEthernetHeader.xSourceAddress ), pxUDPPacket->xIPHeader.ulSourceIPAddress, pxNetworkBuffer->pxInterface );
 
 		#if( ipconfigUSE_CALLBACKS == 1 )
 		{
@@ -441,7 +458,8 @@ UDPPacket_t *pxUDPPacket = (UDPPacket_t *) pxNetworkBuffer->pucEthernetBuffer;
 				else
 				#endif
 				{
-					vARPRefreshCacheEntry( &( pxUDPPacket->xEthernetHeader.xSourceAddress ), pxUDPPacket->xIPHeader.ulSourceIPAddress );
+					vARPRefreshCacheEntry( &( pxUDPPacket->xEthernetHeader.xSourceAddress ), pxUDPPacket->xIPHeader.ulSourceIPAddress,
+						pxNetworkBuffer->pxInterface );
 				}
 				xReturn = ( BaseType_t )ulDNSHandlePacket( pxNetworkBuffer );
 			}
@@ -460,7 +478,8 @@ UDPPacket_t *pxUDPPacket = (UDPPacket_t *) pxNetworkBuffer->pucEthernetBuffer;
 				else
 				#endif
 				{
-					vARPRefreshCacheEntry( &( pxUDPPacket->xEthernetHeader.xSourceAddress ), pxUDPPacket->xIPHeader.ulSourceIPAddress );
+					vARPRefreshCacheEntry( &( pxUDPPacket->xEthernetHeader.xSourceAddress ), pxUDPPacket->xIPHeader.ulSourceIPAddress,
+						pxNetworkBuffer->pxInterface );
 				}
 
 				xReturn = ( BaseType_t ) ulDNSHandlePacket( pxNetworkBuffer );
@@ -480,7 +499,8 @@ UDPPacket_t *pxUDPPacket = (UDPPacket_t *) pxNetworkBuffer->pucEthernetBuffer;
 				else
 				#endif
 				{
-					vARPRefreshCacheEntry( &( pxUDPPacket->xEthernetHeader.xSourceAddress ), pxUDPPacket->xIPHeader.ulSourceIPAddress );
+					vARPRefreshCacheEntry( &( pxUDPPacket->xEthernetHeader.xSourceAddress ), pxUDPPacket->xIPHeader.ulSourceIPAddress,
+						pxNetworkBuffer->pxInterface );
 				}
 				xReturn = ( BaseType_t )ulNBNSHandlePacket( pxNetworkBuffer );
 			}

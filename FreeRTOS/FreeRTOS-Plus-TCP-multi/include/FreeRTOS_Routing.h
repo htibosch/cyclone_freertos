@@ -182,6 +182,12 @@ NetworkEndPoint_t *FreeRTOS_NextEndPoint( NetworkInterface_t *pxInterface, Netwo
 
 /*
  * Find the end-point with given IP-address.
+ * The 'ulWhere' parameter is only for debugging puposes.
+ */
+NetworkEndPoint_t *FreeRTOS_FindEndPointOnIP( uint32_t ulIPAddress, uint32_t ulWhere );
+
+/*
+ * Find the end-point with given IP-address.
  */
 NetworkEndPoint_t *FreeRTOS_FindEndPointOnIP( uint32_t ulIPAddress, uint32_t ulWhere );
 
@@ -204,6 +210,11 @@ void FreeRTOS_GetAddressConfiguration( NetworkEndPoint_t *pxEndPoint, uint32_t *
  * Find the best fitting end-point to reach a given IP-address.
  */
 NetworkEndPoint_t *FreeRTOS_FindEndPointOnNetMask( uint32_t ulIPAddress, uint32_t ulWhere );
+
+/*
+ * Find the best fitting end-point to reach a given IP-address on a given interface
+ */
+NetworkEndPoint_t *FreeRTOS_InterfaceEndPointOnNetMask( NetworkInterface_t *pxInterface, uint32_t ulIPAddress, uint32_t ulWhere );
 
 #if( ipconfigUSE_IPv6 != 0 )
 	NetworkEndPoint_t *FreeRTOS_FindEndPointOnNetMask_IPv6( IPv6_Address_t *pxIPv6Address );

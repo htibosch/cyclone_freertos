@@ -341,6 +341,12 @@ NetworkEndPoint_t *pxEndPoint = pxNetworkEndPoints;
 
 NetworkEndPoint_t *FreeRTOS_FindEndPointOnNetMask( uint32_t ulIPAddress, uint32_t ulWhere )
 {
+	/* The 'ulWhere' parameter is only for debugging puposes. */
+	return FreeRTOS_InterfaceEndPointOnNetMask( ( NetworkInterface_t * )NULL, ulIPAddress, ulWhere );
+}
+
+NetworkEndPoint_t *FreeRTOS_InterfaceEndPointOnNetMask( NetworkInterface_t *pxInterface, uint32_t ulIPAddress, uint32_t ulWhere )
+{
 NetworkEndPoint_t *pxEndPoint = pxNetworkEndPoints;
 NetworkEndPoint_t *pxDefault = NULL;
 
@@ -354,14 +360,18 @@ NetworkEndPoint_t *pxDefault = NULL;
 
 	while( pxEndPoint != NULL )
 	{
-		if( pxEndPoint->bits.bIsDefault != pdFALSE_UNSIGNED )
+		if( ( pxInterface == NULL ) || ( pxEndPoint->pxNetworkInterface == pxInterface ) )
 		{
-			pxDefault = pxEndPoint;
-		}
+			if( pxEndPoint->bits.bIsDefault != pdFALSE_UNSIGNED )
+			{
+				pxDefault = pxEndPoint;
+			}
 
-		if( ( ulIPAddress & pxEndPoint->ulNetMask ) == ( pxEndPoint->ulIPAddress & pxEndPoint->ulNetMask ) )
-		{
-			break;
+			if( ( ulIPAddress & pxEndPoint->ulNetMask ) == ( pxEndPoint->ulIPAddress & pxEndPoint->ulNetMask ) )
+			{
+				/* Found a match. */
+				break;
+			}
 		}
 
 		pxEndPoint = pxEndPoint->pxNext;

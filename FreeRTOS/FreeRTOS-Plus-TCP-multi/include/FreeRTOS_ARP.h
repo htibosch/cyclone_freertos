@@ -71,10 +71,14 @@ extern "C" {
 /* Miscellaneous structure and definitions. */
 /*-----------------------------------------------------------*/
 
+struct xNetworkInterface;
+
 typedef struct xARP_CACHE_TABLE_ROW
 {
 	uint32_t ulIPAddress;		/* The IP address of an ARP cache entry. */
-	MACAddress_t xMACAddress;  /* The MAC address of an ARP cache entry. */
+	MACAddress_t xMACAddress;	/* The MAC address of an ARP cache entry. */
+	struct xNetworkInterface
+		*pxInterface;			/* The Interface on which the MAC address was last seen. */
 	uint8_t ucAge;				/* A value that is periodically decremented but can also be refreshed by active communication.  The ARP cache entry is removed if the value reaches zero. */
     uint8_t ucValid;			/* pdTRUE: xMACAddress is valid, pdFALSE: waiting for ARP reply */
 } ARPCacheRow_t;
@@ -99,7 +103,7 @@ typedef enum
  * cache table then add it - replacing the oldest current entry if there is not
  * a free space available.
  */
-void vARPRefreshCacheEntry( const MACAddress_t * pxMACAddress, const uint32_t ulIPAddress );
+void vARPRefreshCacheEntry( const MACAddress_t * pxMACAddress, const uint32_t ulIPAddress, struct xNetworkInterface *pxInterface );
 
 #if( ipconfigARP_USE_CLASH_DETECTION != 0 )
 	/* Becomes non-zero if another device responded to a gratuitos ARP message. */
@@ -126,12 +130,12 @@ void vARPRefreshCacheEntry( const MACAddress_t * pxMACAddress, const uint32_t ul
  * (maybe DHCP is still in process, or the addressing needs a gateway but there
  * isn't a gateway defined) then return eCantSendPacket.
  */
-eARPLookupResult_t eARPGetCacheEntry( uint32_t *pulIPAddress, MACAddress_t * const pxMACAddress );
+eARPLookupResult_t eARPGetCacheEntry( uint32_t *pulIPAddress, MACAddress_t * const pxMACAddress, struct xNetworkInterface **ppxInterface );
 
 #if( ipconfigUSE_ARP_REVERSED_LOOKUP != 0 )
 
 	/* Lookup an IP-address if only the MAC-address is known */
-	eARPLookupResult_t eARPGetCacheEntryByMac( MACAddress_t * const pxMACAddress, uint32_t *pulIPAddress );
+	eARPLookupResult_t eARPGetCacheEntryByMac( MACAddress_t * const pxMACAddress, uint32_t *pulIPAddress, struct xNetworkInterface **ppxInterface );
 
 #endif
 /*
