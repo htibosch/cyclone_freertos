@@ -85,7 +85,7 @@ extern "C" {
 /* ipconfigMULTI_INTERFACE indicates that this project is linked with +TCP/multi.
 It is only needed temporarily, finally all code will be MULTI_INTERFACE. */
 
-#define ipconfigMULTI_INTERFACE			0
+//#define ipconfigMULTI_INTERFACE			0
 
 /* Define the byte order of the target MCU (the MCU FreeRTOS+TCP is executing
 on).  Valid options are pdFREERTOS_BIG_ENDIAN and pdFREERTOS_LITTLE_ENDIAN. */
@@ -388,6 +388,19 @@ server task. */
 // #define ipconfigIPERF_RX_WINSIZE	( 2 )			/* Size in units of MSS */
 
 #define ipconfigIPERF_RECV_BUFFER_SIZE		( ipconfigIPERF_RX_BUFSIZE )
+
+
+/* get some buffer space ( = performance ) for both FTP and the HTTP server. */
+
+#define ipconfigFTP_TX_BUFSIZE		( 16 * ipconfigTCP_MSS )
+#define ipconfigFTP_TX_WINSIZE		(  8 )
+#define ipconfigFTP_RX_BUFSIZE		( 16 * ipconfigTCP_MSS )
+#define ipconfigFTP_RX_WINSIZE		(  8 )
+
+#define ipconfigHTTP_TX_BUFSIZE		( 16 * ipconfigTCP_MSS )
+#define ipconfigHTTP_TX_WINSIZE		(  8 )
+#define ipconfigHTTP_RX_BUFSIZE		( 16 * ipconfigTCP_MSS )
+#define ipconfigHTTP_RX_WINSIZE		(  8 )
 
 #define ipconfigTCP_FILE_BUFFER_SIZE		( 8 * ipconfigTCP_MSS )
 

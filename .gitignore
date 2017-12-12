@@ -82,3 +82,7 @@ Mkfile.old
 dkms.conf
 /Debug/
 /user_config.mk
+
+*.7z
+*.zip
+*.tar

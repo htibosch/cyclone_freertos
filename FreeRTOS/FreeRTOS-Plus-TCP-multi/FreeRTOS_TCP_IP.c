@@ -3408,7 +3408,7 @@ FreeRTOS_Socket_t *pxReturn;
 			}
 			else if( prvTCPSocketCopy( pxNewSocket, pxSocket ) != pdFALSE )
 			{
-				if( pxNetworkBuffer->pxEndPoint != NUL )
+				if( pxNetworkBuffer->pxEndPoint != NULL )
 				{
 					pxNewSocket->pxEndPoint = pxNetworkBuffer->pxEndPoint;
 					pxNewSocket->ulLocalAddress = FreeRTOS_ntohl( pxNetworkBuffer->pxEndPoint->ulIPAddress );
