@@ -74,6 +74,8 @@
 #include "NetworkBufferManagement.h"
 #include "NetworkInterface.h"
 
+#include "hr_gettime.h"
+
 /* Interrupt events to process.  Currently only the Rx event is processed
 although code for other events is included to allow for possible future
 expansion. */
@@ -365,7 +367,7 @@ alt_cache_l2_sync();
 			alt_cache_system_purge( ucNetworkPackets, sizeof( ucNetworkPackets ) );
 		}
 		#endif
-		tcp_min_rx_buflen = 5;
+		tcp_min_rx_buflen = 8;
 
 		/* The deferred interrupt handler task is created at the highest
 		possible priority to ensure the interrupt handler can return directly
@@ -1124,11 +1126,15 @@ void emac_show_buffers()
 		uxLowestSemCount) ) ;
 }
 
+TaskGuard_t xEmacTask;
 static void prvEMACHandlerTask( void *pvParameters )
 {
 const TickType_t ulMaxBlockTime = pdMS_TO_TICKS( 500UL );
 TimeOut_t xPhyTime;
 TickType_t xPhyRemTime;
+
+
+	vTask_init( &xEmacTask, 15 );
 
 	/* Remove compiler warnings about unused parameters. */
 	( void ) pvParameters;
@@ -1181,8 +1187,10 @@ TickType_t xPhyRemTime;
 
 		if( ( ulISREvents & EMAC_IF_ALL_EVENT ) == 0 )
 		{
+		vTask_finish( &xEmacTask );
 			/* No events to process now, wait for the next. */
 			ulTaskNotifyTake( pdFALSE, ulMaxBlockTime );
+		vTask_start( &xEmacTask );
 		}
 
 		if( ( ulISREvents & EMAC_IF_RX_EVENT ) != 0 )

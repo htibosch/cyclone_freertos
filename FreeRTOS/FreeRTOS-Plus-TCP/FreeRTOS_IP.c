@@ -80,6 +80,8 @@
 
 #include "eventLogging.h"
 
+#include "hr_gettime.h"
+
 /* Used to ensure the structure packing is having the desired effect.  The
 'volatile' is used to prevent compiler warnings about comparing a constant with
 a constant. */
@@ -346,6 +348,9 @@ static BaseType_t xIPTaskInitialised = pdFALSE;
 
 /*-----------------------------------------------------------*/
 
+TaskGuard_t xIpTask;
+
+
 static void prvIPTask( void *pvParameters )
 {
 IPStackEvent_t xReceivedEvent;
@@ -376,6 +381,7 @@ struct freertos_sockaddr xAddress;
 	xIPTaskInitialised = pdTRUE;
 
 	FreeRTOS_debug_printf( ( "prvIPTask started\n" ) );
+vTask_init( &xIpTask, 15000 );
 
 	/* Loop, processing IP events. */
 	for( ;; )
@@ -393,7 +399,9 @@ struct freertos_sockaddr xAddress;
 		event" in case the following call exits due to a time out rather than a
 		message being received. */
 		xReceivedEvent.eEventType = eNoEvent;
+	vTask_finish( &xIpTask );
 		xQueueReceive( xNetworkEventQueue, ( void * ) &xReceivedEvent, xNextIPSleep );
+	vTask_start( &xIpTask );
 
 		#if( ipconfigCHECK_IP_QUEUE_SPACE != 0 )
 		{

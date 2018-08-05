@@ -71,6 +71,8 @@
 #include "FreeRTOS_TCP_server.h"
 #include "FreeRTOS_server_private.h"
 
+#include "hr_gettime.h"
+
 /* Remove the entire file if TCP is not being used. */
 #if( ipconfigUSE_TCP == 1 ) && ( ( ipconfigUSE_HTTP == 1 ) || ( ipconfigUSE_FTP == 1 ) )
 
@@ -83,6 +85,8 @@ static void prvReceiveNewClient( TCPServer_t *pxServer, BaseType_t xIndex, Socke
 static char *strnew( const char *pcString );
 /* Remove slashes at the end of a path. */
 static void prvRemoveSlash( char *pcDir );
+
+TaskGuard_t xTcpTask;
 
 TCPServer_t *FreeRTOS_CreateTCPServer( const struct xSERVER_CONFIG *pxConfigs, BaseType_t xCount )
 {
@@ -172,6 +176,7 @@ SocketSet_t xSocketSet;
 		/* Could not create a socket set, return NULL */
 		pxServer = NULL;
 	}
+	vTask_init( &xTcpTask, 15 );
 
 	return pxServer;
 }
@@ -256,7 +261,9 @@ BaseType_t xIndex;
 BaseType_t xRc;
 
 	/* Let the server do one working cycle */
+vTask_finish( &xTcpTask );
 	xRc = FreeRTOS_select( pxServer->xSocketSet, xBlockingTime );
+vTask_start( &xTcpTask );
 
 	if( xRc != 0 )
 	{

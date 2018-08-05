@@ -165,8 +165,8 @@ exclude the relevant server. */
 #define mainIO_MANAGER_CACHE_SIZE		( 15UL * mainRAM_DISK_SECTOR_SIZE )
 
 /* Define names that will be used for DNS, LLMNR and NBNS searches. */
-#define mainHOST_NAME					"cyclone"
-#define mainDEVICE_NICK_NAME			"cyclone"
+#define mainHOST_NAME					"camera"
+#define mainDEVICE_NICK_NAME			"camera004f6"
 
 #ifndef ARRAY_SIZE
 	#define ARRAY_SIZE(x)	( BaseType_t )( sizeof( x ) / sizeof( x )[ 0 ] )
@@ -231,6 +231,7 @@ more information. */
 #define	_A4_	__attribute__ ( ( aligned( 4 ) ) )
 /* When not aligned, code might crash because of 32-bit access to const data. */
 static _A4_ const uint8_t ucIPAddress[ 4 ] = { configIP_ADDR0, configIP_ADDR1, configIP_ADDR2, configIP_ADDR3 };
+static _A4_ const uint8_t ucIPAddress_2[ 4 ] = { configIP_ADDR0, configIP_ADDR1, configIP_ADDR2, configIP_ADDR3 + 1 };
 static _A4_ const uint8_t ucNetMask[ 4 ] = { configNET_MASK0, configNET_MASK1, configNET_MASK2, configNET_MASK3 };
 static _A4_ const uint8_t ucGatewayAddress[ 4 ] = { configGATEWAY_ADDR0, configGATEWAY_ADDR1, configGATEWAY_ADDR2, configGATEWAY_ADDR3 };
 static _A4_ const uint8_t ucDNSServerAddress[ 4 ] = { configDNS_SERVER_ADDR0, configDNS_SERVER_ADDR1, configDNS_SERVER_ADDR2, configDNS_SERVER_ADDR3 };
@@ -243,6 +244,7 @@ the real network connection to use. */
 
 /* 00:11:22:33:44:49 */
 const _A4_ uint8_t ucMACAddress[ 6 ] = { configMAC_ADDR0, configMAC_ADDR1, configMAC_ADDR2, configMAC_ADDR3, configMAC_ADDR4, configMAC_ADDR5 };
+const _A4_ uint8_t ucMACAddress_2[ 6 ] = { configMAC_ADDR0, configMAC_ADDR1, configMAC_ADDR2, configMAC_ADDR3, configMAC_ADDR4, configMAC_ADDR5 + 1 };
 
 /* Use by the pseudo random number generator. */
 static UBaseType_t ulNextRand;
@@ -298,7 +300,7 @@ int main( void )
 {
 #if( ipconfigMULTI_INTERFACE != 0 )
 	static NetworkInterface_t xInterfaces[ 1 ];
-	static NetworkEndPoint_t xEndPoints[ 1 ];
+	static NetworkEndPoint_t xEndPoints[ 2 ];
 #endif /* ipconfigMULTI_INTERFACE */
 	/* Configure the hardware ready to run the demo. */
 	prvSetupHardware();
@@ -322,12 +324,20 @@ int main( void )
 #if( ipconfigMULTI_INTERFACE != 0 )
 	/* As EMAC1 is used, give index 1 as a parameter. */
 	pxCyclone_FillInterfaceDescriptor( 1, &( xInterfaces[ 0 ] ) );
+
 	FreeRTOS_FillEndPoint( &( xEndPoints[ 0 ] ), ucIPAddress, ucNetMask, ucGatewayAddress, ucDNSServerAddress, ucMACAddress );
 	FreeRTOS_AddEndPoint( &( xInterfaces[ 0 ] ), &( xEndPoints[ 0 ] ) );
 
 	/* You can modify fields: */
 	xEndPoints[ 0 ].bits.bIsDefault = pdTRUE_UNSIGNED;
 	xEndPoints[ 0 ].bits.bWantDHCP = pdFALSE_UNSIGNED;
+
+	FreeRTOS_FillEndPoint( &( xEndPoints[ 1 ] ), ucIPAddress_2, ucNetMask, ucGatewayAddress, ucDNSServerAddress, ucMACAddress_2 );
+	FreeRTOS_AddEndPoint( &( xInterfaces[ 0 ] ), &( xEndPoints[ 1 ] ) );
+
+	/* You can modify fields: */
+	xEndPoints[ 1 ].bits.bIsDefault = pdFALSE_UNSIGNED;
+	xEndPoints[ 1 ].bits.bWantDHCP = pdFALSE_UNSIGNED;
 
 	FreeRTOS_IPStart();
 #else
@@ -462,6 +472,7 @@ extern BaseType_t xPlusTCPStarted;
 		struct freertos_sockaddr xAddress;
 		struct freertos_sockaddr xLocalAddress;
 		struct freertos_sockaddr xEchoServerAddress;
+		Socket_t xUDPSocket = NULL;
 
 		xServerSemaphore = xSemaphoreCreateBinary();
 		configASSERT( xServerSemaphore != NULL );
@@ -499,7 +510,9 @@ extern BaseType_t xPlusTCPStarted;
 				rc = FreeRTOS_recv( xClientSocket, buffer, sizeof buffer, 0 );
 				if( rc != 0 )
 				{
-					FreeRTOS_printf( ( "FreeRTOS_recv: %d\n", rc ) );
+					FreeRTOS_printf( ( "FreeRTOS_recv: %d%s\n",
+						rc,
+						rc == -pdFREERTOS_ERRNO_ENOTCONN ? " ENOTCONN" : "" ) );
 				}
 				if( !wasConnected && FreeRTOS_issocketconnected( xClientSocket ) )
 				{
@@ -586,6 +599,16 @@ extern BaseType_t xPlusTCPStarted;
 					}
 				}
 				#endif
+				if( ( xUDPSocket != NULL ) && ( xUDPSocket != FREERTOS_INVALID_SOCKET ) && ( xCount == 0 ) )
+				{
+					xCount = FreeRTOS_recvfrom( xUDPSocket, ( void * )cBuffer, sizeof( cBuffer )-1, FREERTOS_MSG_DONTWAIT,
+						&xSourceAddress, &xSourceAddressLength );
+					if( xCount > 0 )
+					{
+						eventLogAdd("UDP INPUT %ld", xCount);
+						FreeRTOS_sendto( xUDPSocket, (const void *)cBuffer, xCount, 0, &xSourceAddress, sizeof( xSourceAddress ) );
+					}
+				}
 
 				if( ( xSocket != NULL ) && ( xCount == 0 ) )
 				{
@@ -662,6 +685,98 @@ extern BaseType_t xPlusTCPStarted;
 						lUDPLoggingPrintf( "tcp_min_rx_buflen %d\n", tcp_min_rx_buflen );
 					}
 
+					if( strncmp( cBuffer, "udp", 3 ) == 0 )
+					{
+						char *ptr = cBuffer + 3;
+						unsigned u[ 4 ];
+						unsigned uPortNr;
+						uint8_t ch[ 4 ];
+						int msgLength;
+						while( isspace( *ptr )) { ptr++; }
+						if( sscanf( ptr, "%u%c%u%c%u%c%u%c%u",
+							u + 0, ch + 0,
+							u + 1, ch + 1,
+							u + 2, ch + 2,
+							u + 3, ch + 3,
+							&uPortNr) >= 9 )
+						{
+							const TickType_t xReceiveTimeOut = pdMS_TO_TICKS( 0 );
+							const TickType_t xSendTimeOut = pdMS_TO_TICKS( 0 );
+							uint32_t ipAddress =
+								( u[ 0 ] << 24 ) |
+								( u[ 1 ] << 16 ) |
+								( u[ 2 ] <<  8 ) |
+								( u[ 3 ] <<  0 );
+							int spaceCount = 2;
+							char wasSpace = 0;
+							/* udp 192.168.2.5 2403 Hello world */
+							while( *ptr && spaceCount > 0 )
+							{
+								if( isspace( *ptr ) )
+								{
+									if( !wasSpace )
+									{
+										wasSpace = 1;
+										spaceCount--;
+									}
+								}
+								else
+								{
+									wasSpace = 0;
+								}
+								ptr++;
+							}
+							msgLength = strlen( ptr );
+							lUDPLoggingPrintf( "UDP %lxip port %u msg '%s'\n", ipAddress, uPortNr, ptr );
+							if( msgLength > 0 )
+							{
+								if( xUDPSocket == NULL )
+								{
+									xUDPSocket= FreeRTOS_socket( FREERTOS_AF_INET, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP );
+									if( xUDPSocket == FREERTOS_INVALID_SOCKET)
+									{
+										lUDPLoggingPrintf( "Creation UDP socket failed.\n" );
+									}
+									else
+									{
+									BaseType_t xSendTimeOut = 200;
+									struct freertos_sockaddr xServer;
+										/* Set to non-blocking sends with a timeout of zero as the socket might
+										also be used for debug prints which should not block. */
+										FreeRTOS_setsockopt( xUDPSocket, 0, FREERTOS_SO_SNDTIMEO, &xSendTimeOut, sizeof( xSendTimeOut ) );
+										FreeRTOS_setsockopt( xUDPSocket, 0, FREERTOS_SO_SET_SEMAPHORE, ( void * ) &xServerSemaphore, sizeof( xServerSemaphore ) );
+										/* Zero out the server structure. */
+										memset( ( void * ) &xServer, 0x00, sizeof( xServer ) );
+
+										/* Set family and port. */
+										xServer.sin_len = sizeof( xServer );		/* length of this structure. */
+										xServer.sin_family = FREERTOS_AF_INET;
+										xServer.sin_port = FreeRTOS_htons( uPortNr );
+
+										/* Bind the address to the socket. */
+										if( FreeRTOS_bind( xUDPSocket, &xServer, sizeof( xServer ) ) == -1 )
+										{
+											FreeRTOS_closesocket( xUDPSocket );
+											xUDPSocket = FREERTOS_INVALID_SOCKET;
+											lUDPLoggingPrintf( "Bind UDP socket failed.\n" );
+										}
+									}
+								}
+								if( ( xUDPSocket != NULL ) && ( xUDPSocket != FREERTOS_INVALID_SOCKET ) )
+								{
+								struct freertos_sockaddr xAddress;
+									memset( &xAddress, '\0', sizeof xAddress );
+
+									xAddress.sin_len = sizeof( xAddress );		/* length of this structure. */
+									xAddress.sin_family = FREERTOS_AF_INET;
+									xAddress.sin_port = FreeRTOS_htons( uPortNr );
+									xAddress.sin_addr = FreeRTOS_htonl( ipAddress );
+									FreeRTOS_sendto( xUDPSocket, (const void *)ptr, msgLength, 0, &xAddress, sizeof( xAddress ) );
+								}
+							}
+						}
+					}
+
 					if( strncmp( cBuffer, "echo", 4 ) == 0 )
 					{
 						char *ptr = cBuffer + 4;
@@ -724,12 +839,13 @@ extern BaseType_t xPlusTCPStarted;
 							/* Connect to the echo server. */
 							rc = FreeRTOS_connect( xClientSocket, &xEchoServerAddress, sizeof( xEchoServerAddress ) );
 
-							FreeRTOS_printf( ( "FreeRTOS_connect to %lxip:%u to %lxip:%u: rc %d\n",
+							FreeRTOS_printf( ( "FreeRTOS_connect %lxip:%u to %lxip:%u: rc %d%s\n",
 								FreeRTOS_ntohl( xLocalAddress.sin_addr ),
 								FreeRTOS_ntohs( xLocalAddress.sin_port ),
 								FreeRTOS_ntohl( xEchoServerAddress.sin_addr ),
 								FreeRTOS_ntohs( xEchoServerAddress.sin_port ),
-								rc ) );
+								rc,
+								rc == -pdFREERTOS_ERRNO_EWOULDBLOCK ? " EWOULDBLOCK" : "" ) );
 						}
 						else
 						{

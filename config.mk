@@ -28,7 +28,7 @@ USE_USB_CDC=true
 USE_TELNET=true
 USE_USART=true
 USE_LOG_EVENT=false
-ipconfigMULTI_INTERFACE=false
+ipconfigMULTI_INTERFACE=true
 
 C_SRCS=
 CPP_SRCS=

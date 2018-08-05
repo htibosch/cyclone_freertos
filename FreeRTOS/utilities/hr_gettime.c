@@ -73,6 +73,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* FreeRTOS includes. */
 #include "FreeRTOS.h"
@@ -81,10 +82,18 @@
 
 #include "hr_gettime.h"
 
+#include "eventLogging.h"
+
 /* The TC interrupt will become active as little as possible: every half
 minute. */
 #define hrSECONDS_PER_INTERRUPT		30ul
 #define hrMICROSECONDS_PER_SECOND	1000000ull
+
+#ifndef ARRAY_SIZE
+#	define	ARRAY_SIZE( x )	( int )( sizeof( x ) / sizeof( x )[ 0 ] )
+#endif
+
+int lUDPLoggingPrintf( const char *pcFormatString, ... );
 
 /*-----------------------------------------------------------*/
 
@@ -109,4 +118,45 @@ uint64_t ullCurrentTime, ullReturn;
 		ullReturn = 0ull;
 	}
 	return ullReturn;
+}
+
+void vTask_init( TaskGuard_t *pxTask, uint32_t ulMaxDiff )
+{
+	memset( pxTask, '\0', sizeof *pxTask );
+	pxTask->ulMaxDifference = ulMaxDiff;
+	pxTask->ullLastTime = ullGetHighResolutionTime();
+}
+
+void vTask_finish( TaskGuard_t *pxTask )
+{
+uint64_t ullCurrentTime = ullGetHighResolutionTime();
+	if( pxTask->cStarted != pdFALSE )
+	{
+	uint32_t ullDifferenceUS;
+	uint32_t ulDifferenceMS;
+	int index;
+
+		pxTask->cStarted = pdFALSE;
+		ullDifferenceUS = ullCurrentTime - pxTask->ullLastTime;
+		ulDifferenceMS = ( uint32_t ) ( ( ullDifferenceUS + 500ull ) / 1000ull );
+		index = ( int )( ullDifferenceUS / 100ull );
+		if( index < 0 || index >= ARRAY_SIZE( pxTask->ulTimes ) )
+		{
+			index = ARRAY_SIZE( pxTask->ulTimes ) - 1;
+		}
+		pxTask->ulTimes[ index ]++;
+
+		if( ulDifferenceMS > pxTask->ulMaxDifference )
+		{
+			eventLogAdd("%s: %lu ms", pcTaskGetTaskName( NULL ), ulDifferenceMS );
+			lUDPLoggingPrintf( "SlowLoop: %s: %lu ms\n", pcTaskGetTaskName( NULL ), ulDifferenceMS );
+		}
+	}
+	pxTask->ullLastTime = ullCurrentTime;
+}
+
+void vTask_start( TaskGuard_t *pxTask )
+{
+	pxTask->cStarted = pdTRUE;
+	pxTask->ullLastTime = ullGetHighResolutionTime();
 }
