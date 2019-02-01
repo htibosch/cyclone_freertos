@@ -137,6 +137,11 @@
 #define PHY_PAGE_ADDR_REG_88E1518			22
 
 /*-----------------------------------------------------------*/
+/*---------------- Added by Magnus, JT electric -------------*/
+#define PHY_ID_AR8035						(0xD070004D)	/* ((PHY_ID2&0xFFF0) << 16) | PHY_ID1	*/
+//#define PHY_CTRL_MAC_REG_88E1518			21
+#define PHY_SS_REG_AR8035					0x11
+/*-----------------------------------------------------------*/
 
 uint32_t ulUsePHYAddress;
 
@@ -153,6 +158,7 @@ struct SPHYType xPHYTypes[] = {
 	{ PHY_ID_KSZ9021,     "Micrel KSZ9021 PHY" },
 	{ PHY_ID_KSZ9031,     "Micrel KSZ9031/KSZ9071 PHY" },
 	{ PHY_ID_PEF7071,     "Lantiq PEF7071 PHY" },
+	{ PHY_ID_AR8035,	  "Atheros AR8035 PHY"}
 };
 
 int cyclone_phy_init(int iMacID, int Rate)
@@ -269,6 +275,13 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 		RegVal |= (TXRX_CLOCK_DELAYED_88E1518);
 		gmac_mdio_write( iMacID, iPHYAddress, PHY_CTRL_MAC_REG_88E1518, RegVal);
 		gmac_mdio_write( iMacID, iPHYAddress, PHY_PAGE_ADDR_REG_88E1518, 0);
+		break;
+	case PHY_ID_AR8035:
+		FreeRTOS_printf( ( "PHY : AR8035 config has not been implemented yet\n" ) );
+		//PHY_IMASK_REG, write and verify
+		//PHY_1GCTL_REG
+		//set bit 10 in CTL_REG
+
 		break;
 	}
 									/* Prepare to configure the MAC */
@@ -462,8 +475,25 @@ uint8_t *ioaddr = ucFirstIOAddres( iMacID );
 			Rate |= 1;
 		}
 		break;
+	case PHY_ID_AR8035:
+		RegVal = gmac_mdio_read( iMacID, iPHYAddress, PHY_SS_REG_AR8035 );
+		RegTmp = ( RegVal >> 14 ) & 3;
+		if( RegTmp == 2 )
+		{
+			Rate = 1000;
+		}
+		else if( RegTmp == 1 )
+		{
+			Rate = 100;
+		}
+		if( ( RegVal & (1<<13)) == 0 )				/* If Half Duplex								*/
+		{
+			Rate |= 1;
+		}
+		//FreeRTOS_printf("PHY : Rate unknown\n");
+		break;
 	}
-
+	FreeRTOS_printf( ("PHY : Rate-variable = %d\n", Rate));
 	FreeRTOS_printf( ( "PHY : Link is up at %d Mbps %s duplex\n", Rate & ~1, (Rate & 1) ? "half" : "full" ) );
 
 													/* Read SMII status to clear changed bit		*/
